@@ -1,103 +1,105 @@
-import Image from "next/image";
+'use client';
+
+import React, { useState } from 'react';
+import dynamic from 'next/dynamic';
+
+// 클라이언트 사이드에서만 렌더링되도록 동적 임포트
+const DidManager = dynamic(() => import('../components/DidManager'), { ssr: false });
+const VcManager = dynamic(() => import('../components/VcManager'), { ssr: false });
+const VpManager = dynamic(() => import('../components/VpManager'), { ssr: false });
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [activeTab, setActiveTab] = useState<'did' | 'vc' | 'vp'>('did');
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  return (
+    <main className="min-h-screen bg-gray-100 p-4 md:p-8">
+      <div className="max-w-4xl mx-auto">
+        <header className="mb-8 text-center">
+          <h1 className="text-3xl md:text-4xl font-bold mb-2">DID 기반 신원 관리 시스템</h1>
+          <p className="text-gray-600">
+            DID, VC, VP의 생성 및 관리를 위한 데모 애플리케이션
+          </p>
+        </header>
+
+        {/* 탭 네비게이션 */}
+        <div className="mb-6 border-b border-gray-200">
+          <nav className="flex -mb-px">
+            <button
+              onClick={() => setActiveTab('did')}
+              className={`py-4 px-6 text-center border-b-2 font-medium text-sm md:text-base ${
+                activeTab === 'did'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              DID 관리
+            </button>
+            <button
+              onClick={() => setActiveTab('vc')}
+              className={`py-4 px-6 text-center border-b-2 font-medium text-sm md:text-base ${
+                activeTab === 'vc'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              VC 관리
+            </button>
+            <button
+              onClick={() => setActiveTab('vp')}
+              className={`py-4 px-6 text-center border-b-2 font-medium text-sm md:text-base ${
+                activeTab === 'vp'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              VP 관리
+            </button>
+          </nav>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+
+        {/* 컴포넌트 렌더링 */}
+        <div>
+          {activeTab === 'did' && <DidManager />}
+          {activeTab === 'vc' && <VcManager />}
+          {activeTab === 'vp' && <VpManager />}
+        </div>
+
+        {/* 설명 섹션 */}
+        <div className="mt-12 bg-white shadow-md rounded-lg p-6">
+          <h2 className="text-xl font-bold mb-4">DID, VC, VP 개념 설명</h2>
+          
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold mb-2">DID (Decentralized Identifier)</h3>
+            <p className="text-gray-700">
+              분산형 신원의 기본 식별자로, 사용자가 중앙 기관 없이 자신의 디지털 ID를 생성하고 제어할 수 있게 해주는 고유 식별자입니다.
+              DID는 "did:method:specific-id" 형식으로 구성됩니다.
+            </p>
+          </div>
+          
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold mb-2">DID Document</h3>
+            <p className="text-gray-700">
+              DID와 1:1로 연결된 문서로, 해당 DID에 대한 메타데이터를 포함합니다. 이 문서에는 공개키, 서비스 엔드포인트, 인증 방법 등이 포함됩니다.
+            </p>
+          </div>
+          
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold mb-2">VC (Verifiable Credential)</h3>
+            <p className="text-gray-700">
+              발급자(Issuer)가 소유자(Holder)에게 발급하는 검증 가능한 디지털 자격 증명입니다. 
+              VC는 발급자의 DID로 서명되며, 소유자의 DID를 참조하고, 특정 주장(claims)을 포함합니다.
+            </p>
+          </div>
+          
+          <div>
+            <h3 className="text-lg font-semibold mb-2">VP (Verifiable Presentation)</h3>
+            <p className="text-gray-700">
+              소유자가 검증자(Verifier)에게 제시하는 VC의 모음입니다. 
+              VP는 소유자의 DID로 서명되며, 하나 이상의 VC를 포함할 수 있고, 소유자가 자신의 정보를 선택적으로 공개할 수 있게 합니다.
+            </p>
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }
