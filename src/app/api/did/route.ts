@@ -1,4 +1,3 @@
-import { generateDid, resolveDid } from '@/lib/did/didUtils';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateSimpleDid } from '@/lib/did/didUtils';
 import { createDID, getAllActiveDIDs } from '@/lib/db/didRepository';
