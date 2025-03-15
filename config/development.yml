@@ -1,0 +1,14 @@
+# 개발 환경 설정
+# default.yml을 상속받아 개발 환경에서 필요한 설정만 오버라이드
+
+server:
+  port: 3000
+  host: 0.0.0.0  # 모든 네트워크 인터페이스에서 접근 가능
+
+database:
+  type: sqlite
+  path: ./data/did-system-dev.db
+  initialize: false
+
+logging:
+  level: info 

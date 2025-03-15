@@ -1,5 +1,7 @@
 import { createVC } from '@/lib/did/vcUtils';
 import { NextRequest, NextResponse } from 'next/server';
+import { getAllVCs } from '@/lib/db/vcRepository';
+import db from '@/lib/db';
 
 /**
  * @swagger
@@ -8,6 +10,12 @@ import { NextRequest, NextResponse } from 'next/server';
  *     summary: VC 목록 조회
  *     tags: [VC]
  *     description: 저장된 VC 목록을 조회합니다.
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 반환할 최대 VC 수
  *     responses:
  *       200:
  *         description: 성공적으로 VC 목록을 조회함
@@ -77,13 +85,46 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 
 // VC 목록 조회
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // 서버 측에서는 VC 목록을 데이터베이스에서 가져와야 하지만,
-    // 현재는 클라이언트 측 로컬 스토리지에 저장하므로 빈 배열 반환
-    return NextResponse.json([]);
+    const { searchParams } = new URL(request.url);
+    const limitParam = searchParams.get('limit');
+    const offsetParam = searchParams.get('offset');
+    const limit = limitParam ? parseInt(limitParam) : undefined;
+    const offset = offsetParam ? parseInt(offsetParam) : 0;
+    
+    // 테이블 존재 여부 확인
+    const tableExistsStmt = db.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='verifiable_credentials'
+    `);
+    const tableExists = tableExistsStmt.get();
+    
+    if (!tableExists) {
+      console.log('verifiable_credentials 테이블이 존재하지 않습니다.');
+      return NextResponse.json([]);
+    }
+    
+    if (limit) {
+      // 제한된 수의 VC 목록 가져오기
+      const stmt = db.prepare(`
+        SELECT * FROM verifiable_credentials
+        ORDER BY issuance_date DESC
+        LIMIT ? OFFSET ?
+      `);
+      const vcs = stmt.all(limit, offset);
+      return NextResponse.json(vcs);
+    } else {
+      // 모든 VC 목록 가져오기
+      const vcs = getAllVCs();
+      return NextResponse.json(vcs);
+    }
   } catch (error: any) {
-    return NextResponse.json({ message: error.message || '알 수 없는 오류' }, { status: 500 });
+    console.error('VC 목록 조회 오류:', error);
+    return NextResponse.json(
+      { error: error.message || 'VC 목록 조회 중 오류가 발생했습니다.' }, 
+      { status: 500 }
+    );
   }
 }
 

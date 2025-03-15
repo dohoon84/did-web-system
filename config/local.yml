@@ -1,0 +1,14 @@
+# 로컬 개발 환경 설정
+# default.yml을 상속받아 로컬 환경에서 필요한 설정만 오버라이드
+
+server:
+  port: 3000
+  host: localhost
+
+database:
+  type: sqlite
+  path: ./data/did-system-local.db
+  initialize: false
+
+logging:
+  level: debug  # 로컬 환경에서는 더 자세한 로그 출력 

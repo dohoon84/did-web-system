@@ -1,0 +1,14 @@
+# 프로덕션 환경 설정
+# default.yml을 상속받아 프로덕션 환경에서 필요한 설정만 오버라이드
+
+server:
+  port: 80
+  host: 0.0.0.0
+
+database:
+  type: sqlite
+  path: ./data/did-system-prod.db
+  initialize: false  # 프로덕션에서는 자동 초기화하지 않음
+
+logging:
+  level: warn  # 프로덕션에서는 중요한 로그만 출력 

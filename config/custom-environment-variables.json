@@ -1,0 +1,17 @@
+{
+  "server": {
+    "port": "PORT",
+    "host": "HOST"
+  },
+  "database": {
+    "type": "DB_TYPE",
+    "path": "DB_PATH"
+  },
+  "api": {
+    "prefix": "API_PREFIX",
+    "version": "API_VERSION"
+  },
+  "logging": {
+    "level": "LOG_LEVEL"
+  }
+} 

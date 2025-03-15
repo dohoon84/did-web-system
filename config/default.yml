@@ -1,0 +1,19 @@
+# 기본 설정 파일
+# 모든 환경에서 공통으로 사용되는 설정
+
+server:
+  port: 3000
+  host: localhost
+
+database:
+  type: sqlite
+  path: ./data/did-system.db
+  initialize: true  # 서버 시작 시 데이터베이스 초기화 여부
+
+api:
+  prefix: /api
+  version: v1
+
+logging:
+  level: info
+  format: combined 

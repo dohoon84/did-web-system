@@ -1,14 +1,13 @@
-import { verifyVP } from '@/lib/did/vpUtils';
-import { resolveDid } from '@/lib/did/didUtils';
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyVP } from '@/lib/did/vpUtils';
+import { createVP, updateVPVerificationResult } from '@/lib/db/vpRepository';
 
 /**
  * @swagger
  * /api/vp/verify:
  *   post:
- *     summary: VP 검증
- *     tags: [VP]
- *     description: VP의 유효성을 검증합니다.
+ *     summary: VP를 검증합니다.
+ *     description: 제출된 VP의 유효성을 검증하고 연령 조건을 확인합니다.
  *     requestBody:
  *       required: true
  *       content:
@@ -16,66 +15,94 @@ import { NextRequest, NextResponse } from 'next/server';
  *           schema:
  *             type: object
  *             required:
- *               - vpJws
- *               - holderDid
+ *               - vp
+ *               - verifier
+ *               - requiredAge
  *             properties:
- *               vpJws:
+ *               vp:
+ *                 type: object
+ *                 description: 검증할 VP 객체
+ *               verifier:
  *                 type: string
- *                 description: 검증할 VP의 JWS
- *               holderDid:
- *                 type: string
- *                 description: 소유자 DID
+ *                 description: 검증자 식별자
+ *               requiredAge:
+ *                 type: number
+ *                 description: 요구되는 최소 연령
  *     responses:
  *       200:
- *         description: 검증 결과
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 isValid:
- *                   type: boolean
- *                 vp:
- *                   type: object
- *                   description: 검증된 VP 내용 (유효한 경우)
- *                 error:
- *                   type: string
- *                   description: 오류 메시지 (유효하지 않은 경우)
+ *         description: VP 검증 결과
  *       400:
  *         description: 잘못된 요청
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  *       500:
  *         description: 서버 오류
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { vpJws, holderDid } = body;
+    const { vp, verifier, requiredAge } = body;
     
-    if (!vpJws || !holderDid) {
-      return NextResponse.json({ message: '필수 필드가 누락되었습니다.' }, { status: 400 });
+    // 필수 필드 검증
+    if (!vp || !verifier || requiredAge === undefined) {
+      return NextResponse.json(
+        { error: '필수 필드가 누락되었습니다.' },
+        { status: 400 }
+      );
     }
     
-    // 소유자의 DID Document 조회
-    const holderDidDocument = await resolveDid(holderDid);
-    
-    if (!holderDidDocument) {
-      return NextResponse.json({ message: '소유자 DID를 찾을 수 없습니다.' }, { status: 400 });
+    // VP 형식 검증
+    if (!vp.holder || !vp.verifiableCredential || !Array.isArray(vp.verifiableCredential)) {
+      return NextResponse.json(
+        { error: 'VP 형식이 올바르지 않습니다.' },
+        { status: 400 }
+      );
     }
     
-    // VP 검증
-    const result = await verifyVP(vpJws, holderDidDocument);
+    // VP 저장
+    const vpRecord = createVP({
+      holder_did: vp.holder,
+      verifier: verifier,
+      presentation_data: JSON.stringify(vp)
+    });
     
-    return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message || '알 수 없는 오류' }, { status: 500 });
+    // VP 검증 (로컬 개발 환경에서는 항상 성공)
+    const verificationResult = await verifyVP(vp);
+    
+    // 연령 인증 VC 찾기
+    const ageCredential = vp.verifiableCredential.find((vc: any) => 
+      vc.type && Array.isArray(vc.type) && vc.type.includes('AgeVerificationCredential')
+    );
+    
+    let ageVerified = false;
+    let actualAge = null;
+    
+    if (ageCredential && ageCredential.credentialSubject) {
+      actualAge = ageCredential.credentialSubject.age;
+      ageVerified = actualAge >= requiredAge;
+    }
+    
+    // 검증 결과 저장
+    const result = {
+      signatureValid: verificationResult.verified,
+      ageVerified: ageVerified,
+      actualAge: actualAge,
+      requiredAge: requiredAge,
+      timestamp: new Date().toISOString()
+    };
+    
+    // DB에 검증 결과 업데이트
+    updateVPVerificationResult(vpRecord.id, JSON.stringify(result));
+    
+    return NextResponse.json({
+      success: true,
+      vpId: vpRecord.id,
+      verificationResult: result
+    });
+    
+  } catch (error) {
+    console.error('VP 검증 오류:', error);
+    return NextResponse.json(
+      { error: 'VP 검증 중 오류가 발생했습니다.' },
+      { status: 500 }
+    );
   }
 } 

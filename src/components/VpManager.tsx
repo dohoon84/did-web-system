@@ -1,163 +1,220 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { loadDid } from '../lib/did/didUtils';
-import { loadVCList } from '../lib/did/vcUtils';
-import { createVP, storeVP, loadVPList, deleteVP, verifyVP } from '../lib/did/vpUtils';
+
+interface VP {
+  id: string;
+  holder_did: string;
+  verifier: string;
+  presentation_data: string;
+  verification_result?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface VC {
+  id: string;
+  issuer_did: string;
+  subject_did: string;
+  credential_type: string;
+  credential_data: string;
+  issuance_date: string;
+  expiration_date?: string;
+}
+
+interface DID {
+  id: string;
+  did: string;
+  did_document: string;
+  user_id?: string;
+  created_at: string;
+}
 
 const VpManager: React.FC = () => {
-  const [didInfo, setDidInfo] = useState<any>(null);
-  const [vcList, setVcList] = useState<any[]>([]);
-  const [vpList, setVpList] = useState<any[]>([]);
+  const [vps, setVps] = useState<VP[]>([]);
+  const [vcs, setVcs] = useState<VC[]>([]);
+  const [dids, setDids] = useState<DID[]>([]);
+  const [selectedVp, setSelectedVp] = useState<VP | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [isMounted, setIsMounted] = useState<boolean>(false);
   
   // VP 생성 폼 상태
-  const [selectedVCs, setSelectedVCs] = useState<string[]>([]);
-  const [challenge, setChallenge] = useState<string>('');
-  const [domain, setDomain] = useState<string>('');
+  const [holderDid, setHolderDid] = useState<string>('');
+  const [selectedVcIds, setSelectedVcIds] = useState<string[]>([]);
+  const [verifier, setVerifier] = useState<string>('성인 인증 서비스');
+  const [requiredAge, setRequiredAge] = useState<number>(19);
   
-  // 검증 상태
-  const [verifyResult, setVerifyResult] = useState<any>(null);
-  const [vpToVerify, setVpToVerify] = useState<string>('');
-
-  // 컴포넌트 마운트 시 로컬 스토리지에서 DID, VC, VP 정보 로드
-  useEffect(() => {
-    setIsMounted(true);
-    const loadedDid = loadDid();
-    if (loadedDid) {
-      setDidInfo(loadedDid);
+  // VP 목록 불러오기
+  const fetchVps = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetch('/api/vp');
+      if (!response.ok) {
+        throw new Error('VP 목록을 불러오는데 실패했습니다.');
+      }
+      
+      const data = await response.json();
+      setVps(data);
+      
+      if (data.length > 0 && !selectedVp) {
+        setSelectedVp(data[0]);
+      }
+    } catch (err: any) {
+      setError(err.message || '알 수 없는 오류가 발생했습니다.');
+      console.error('VP 목록 불러오기 오류:', err);
+    } finally {
+      setLoading(false);
     }
-    
-    const loadedVCs = loadVCList();
-    setVcList(loadedVCs);
-    
-    const loadedVPs = loadVPList();
-    setVpList(loadedVPs);
+  };
+
+  // VC 목록 불러오기
+  const fetchVcs = async () => {
+    try {
+      const response = await fetch('/api/vc');
+      if (!response.ok) {
+        throw new Error('VC 목록을 불러오는데 실패했습니다.');
+      }
+      
+      const data = await response.json();
+      setVcs(data);
+    } catch (err: any) {
+      console.error('VC 목록 불러오기 오류:', err);
+    }
+  };
+
+  // DID 목록 불러오기
+  const fetchDids = async () => {
+    try {
+      const response = await fetch('/api/did');
+      if (!response.ok) {
+        throw new Error('DID 목록을 불러오는데 실패했습니다.');
+      }
+      
+      const data = await response.json();
+      setDids(data);
+      
+      if (data.length > 0) {
+        setHolderDid(data[0].did);
+      }
+    } catch (err: any) {
+      console.error('DID 목록 불러오기 오류:', err);
+    }
+  };
+
+  // 컴포넌트 마운트 시 데이터 불러오기
+  useEffect(() => {
+    fetchVps();
+    fetchVcs();
+    fetchDids();
   }, []);
 
-  // 클라이언트 사이드 렌더링 확인
-  if (!isMounted) {
-    return <div className="bg-white shadow-md rounded-lg p-6 mb-6">
-      <h2 className="text-2xl font-bold mb-4">VP(Verifiable Presentation) 관리</h2>
-      <p>로딩 중...</p>
-    </div>;
-  }
-
-  // VP 생성 함수
-  const handleCreateVP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!didInfo) {
-      setError('DID가 없습니다. 먼저 DID를 생성해주세요.');
-      return;
-    }
-    
-    if (selectedVCs.length === 0) {
-      setError('하나 이상의 VC를 선택해주세요.');
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      setError(null);
-      setSuccess(null);
-      
-      // 선택된 VC의 JWS 목록 가져오기
-      const vcJwsList = selectedVCs.map(vcId => {
-        const vc = vcList.find(vc => vc.id === vcId);
-        return vc.jws;
-      });
-      
-      // VP 생성
-      const { jws, vp } = await createVP(
-        didInfo.did,
-        didInfo.privateKey,
-        vcJwsList,
-        challenge || undefined,
-        domain || undefined
-      );
-      
-      // 로컬 스토리지에 저장
-      storeVP(jws, vp);
-      
-      // 상태 업데이트
-      setVpList([...vpList, { id: vp.id, jws, vp }]);
-      setSuccess('VP가 성공적으로 생성되었습니다.');
-      
-      // 폼 초기화
-      setSelectedVCs([]);
-      setChallenge('');
-      setDomain('');
-    } catch (err: any) {
-      setError(err.message || '알 수 없는 오류가 발생했습니다.');
-      console.error('VP 생성 오류:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // VP 삭제 함수
-  const handleDeleteVP = (vpId: string) => {
-    try {
-      deleteVP(vpId);
-      setVpList(vpList.filter(vp => vp.id !== vpId));
-      setSuccess('VP가 삭제되었습니다.');
-    } catch (err: any) {
-      setError(err.message || '알 수 없는 오류가 발생했습니다.');
-      console.error('VP 삭제 오류:', err);
-    }
-  };
-
-  // VP 검증 함수
-  const handleVerifyVP = async () => {
-    if (!vpToVerify) {
-      setError('검증할 VP를 선택해주세요.');
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      setError(null);
-      setSuccess(null);
-      
-      const selectedVP = vpList.find(vp => vp.id === vpToVerify);
-      if (!selectedVP) {
-        throw new Error('선택한 VP를 찾을 수 없습니다.');
-      }
-      
-      // VP 검증
-      const result = await verifyVP(
-        selectedVP.jws, 
-        didInfo.didDocument
-      );
-      
-      setVerifyResult(result);
-      
-      if (result.isValid) {
-        setSuccess('VP가 성공적으로 검증되었습니다.');
-      } else {
-        setError(`VP 검증 실패: ${result.error}`);
-      }
-    } catch (err: any) {
-      setError(err.message || '알 수 없는 오류가 발생했습니다.');
-      console.error('VP 검증 오류:', err);
-    } finally {
-      setLoading(false);
-    }
+  // VP 선택 함수
+  const handleSelectVp = (vp: VP) => {
+    setSelectedVp(vp);
   };
 
   // VC 선택 핸들러
-  const handleVCSelection = (vcId: string) => {
-    setSelectedVCs(prev => {
+  const handleVcSelection = (vcId: string) => {
+    setSelectedVcIds(prev => {
       if (prev.includes(vcId)) {
         return prev.filter(id => id !== vcId);
       } else {
         return [...prev, vcId];
       }
     });
+  };
+
+  // VP 생성 및 검증 함수
+  const handleVerifyVp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!holderDid || selectedVcIds.length === 0) {
+      setError('모든 필드를 입력해주세요.');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+      
+      // 선택된 VC 데이터 가져오기
+      const selectedVcs = vcs.filter(vc => selectedVcIds.includes(vc.id));
+      
+      // VP 생성 및 검증 API 호출
+      const vpData = {
+        '@context': ['https://www.w3.org/2018/credentials/v1'],
+        'type': ['VerifiablePresentation'],
+        'holder': holderDid,
+        'verifiableCredential': selectedVcs.map(vc => JSON.parse(vc.credential_data)),
+        'proof': {
+          'type': 'Ed25519Signature2020',
+          'created': new Date().toISOString(),
+          'verificationMethod': `${holderDid}#keys-1`,
+          'proofPurpose': 'authentication',
+          'challenge': '123456',
+          'domain': 'example.com',
+          'jws': 'eyJhbGciOiJFZERTQSJ9.DUMMY_SIGNATURE_FOR_DEVELOPMENT.DUMMY'
+        }
+      };
+      
+      const response = await fetch('/api/vp/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          vp: vpData,
+          verifier: verifier,
+          requiredAge: requiredAge
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'VP 검증에 실패했습니다.');
+      }
+      
+      const data = await response.json();
+      
+      // VP 목록 다시 불러오기
+      fetchVps();
+      
+      setSuccess('VP가 성공적으로 생성되고 검증되었습니다.');
+      
+      // 폼 초기화
+      setSelectedVcIds([]);
+    } catch (err: any) {
+      setError(err.message || '알 수 없는 오류가 발생했습니다.');
+      console.error('VP 생성/검증 오류:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // VP 데이터 파싱 함수
+  const parseVpData = (vpDataStr: string) => {
+    try {
+      return JSON.parse(vpDataStr);
+    } catch (err) {
+      console.error('VP 데이터 파싱 오류:', err);
+      return { error: 'VP 데이터 파싱 오류' };
+    }
+  };
+
+  // 검증 결과 파싱 함수
+  const parseVerificationResult = (resultStr?: string) => {
+    if (!resultStr) return null;
+    
+    try {
+      return JSON.parse(resultStr);
+    } catch (err) {
+      console.error('검증 결과 파싱 오류:', err);
+      return { error: '검증 결과 파싱 오류' };
+    }
   };
 
   return (
@@ -176,156 +233,180 @@ const VpManager: React.FC = () => {
         </div>
       )}
       
-      {!didInfo ? (
-        <div className="mb-4">
-          <p>DID가 없습니다. 먼저 DID를 생성해주세요.</p>
+      {/* VP 생성 및 검증 폼 */}
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold mb-2">VP 생성 및 검증</h3>
+        <form onSubmit={handleVerifyVp} className="bg-gray-50 p-4 rounded">
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              홀더 DID
+            </label>
+            <select
+              value={holderDid}
+              onChange={(e) => setHolderDid(e.target.value)}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              required
+            >
+              <option value="">홀더 DID 선택</option>
+              {dids.map((did) => (
+                <option key={did.id} value={did.did}>
+                  {did.did}
+                </option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              포함할 VC 선택
+            </label>
+            <div className="bg-gray-100 p-3 rounded max-h-60 overflow-y-auto">
+              {vcs.length === 0 ? (
+                <p className="text-gray-500">발급된 VC가 없습니다.</p>
+              ) : (
+                vcs.map((vc) => (
+                  <div key={vc.id} className="flex items-center mb-2">
+                    <input
+                      type="checkbox"
+                      id={`vc-${vc.id}`}
+                      checked={selectedVcIds.includes(vc.id)}
+                      onChange={() => handleVcSelection(vc.id)}
+                      className="mr-2"
+                    />
+                    <label htmlFor={`vc-${vc.id}`} className="text-sm">
+                      {vc.credential_type} - {new Date(vc.issuance_date).toLocaleDateString()}
+                    </label>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              검증자
+            </label>
+            <input
+              type="text"
+              value={verifier}
+              onChange={(e) => setVerifier(e.target.value)}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              required
+            />
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              요구 연령
+            </label>
+            <input
+              type="number"
+              value={requiredAge}
+              onChange={(e) => setRequiredAge(parseInt(e.target.value))}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              min="1"
+              required
+            />
+          </div>
+          
+          <button
+            type="submit"
+            disabled={loading || !holderDid || selectedVcIds.length === 0}
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+          >
+            {loading ? '처리 중...' : 'VP 생성 및 검증하기'}
+          </button>
+        </form>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="md:col-span-1">
+          <h3 className="text-lg font-semibold mb-2">VP 목록</h3>
+          {vps.length === 0 ? (
+            <p className="text-gray-500">생성된 VP가 없습니다.</p>
+          ) : (
+            <div className="bg-gray-100 p-3 rounded overflow-y-auto max-h-96">
+              <ul>
+                {vps.map((vp) => (
+                  <li 
+                    key={vp.id} 
+                    className={`p-2 mb-1 rounded cursor-pointer hover:bg-gray-200 ${selectedVp?.id === vp.id ? 'bg-gray-200' : ''}`}
+                    onClick={() => handleSelectVp(vp)}
+                  >
+                    <div className="text-sm font-medium truncate">홀더: {vp.holder_did}</div>
+                    <div className="text-xs">검증자: {vp.verifier}</div>
+                    <div className="text-xs text-gray-500">{new Date(vp.created_at).toLocaleString()}</div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
-      ) : vcList.length === 0 ? (
-        <div className="mb-4">
-          <p>VC가 없습니다. 먼저 VC를 발급해주세요.</p>
-        </div>
-      ) : (
-        <>
-          {/* VP 생성 폼 */}
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-2">VP 생성</h3>
-            <form onSubmit={handleCreateVP}>
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  포함할 VC 선택
-                </label>
-                <div className="bg-gray-100 p-3 rounded max-h-60 overflow-y-auto">
-                  {vcList.map((vc) => (
-                    <div key={vc.id} className="flex items-center mb-2">
-                      <input
-                        type="checkbox"
-                        id={`vc-${vc.id}`}
-                        checked={selectedVCs.includes(vc.id)}
-                        onChange={() => handleVCSelection(vc.id)}
-                        className="mr-2"
-                      />
-                      <label htmlFor={`vc-${vc.id}`} className="text-sm">
-                        {vc.id} - {vc.vc.credentialSubject[Object.keys(vc.vc.credentialSubject).find(key => key !== 'id') || '']}
-                      </label>
-                    </div>
-                  ))}
+        
+        <div className="md:col-span-2">
+          {selectedVp ? (
+            <>
+              <h3 className="text-lg font-semibold mb-2">VP 상세 정보</h3>
+              <div className="bg-gray-100 p-3 rounded mb-4">
+                <div className="mb-2">
+                  <span className="font-semibold">홀더:</span>
+                  <div className="text-sm break-all">{selectedVp.holder_did}</div>
+                </div>
+                <div className="mb-2">
+                  <span className="font-semibold">검증자:</span>
+                  <div className="text-sm">{selectedVp.verifier}</div>
+                </div>
+                <div className="mb-2">
+                  <span className="font-semibold">생성일:</span>
+                  <div className="text-sm">{new Date(selectedVp.created_at).toLocaleString()}</div>
                 </div>
               </div>
               
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  챌린지 (선택사항)
-                </label>
-                <input
-                  type="text"
-                  value={challenge}
-                  onChange={(e) => setChallenge(e.target.value)}
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                  placeholder="검증자가 제공한 챌린지 값"
-                />
-              </div>
-              
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  도메인 (선택사항)
-                </label>
-                <input
-                  type="text"
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                  placeholder="검증자의 도메인"
-                />
-              </div>
-              
-              <button
-                type="submit"
-                disabled={loading || selectedVCs.length === 0}
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-              >
-                {loading ? '생성 중...' : 'VP 생성하기'}
-              </button>
-            </form>
-          </div>
-          
-          {/* VP 목록 */}
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-2">VP 목록</h3>
-            {vpList.length === 0 ? (
-              <p>생성된 VP가 없습니다.</p>
-            ) : (
-              <div className="space-y-4">
-                {vpList.map((vp) => (
-                  <div key={vp.id} className="border rounded p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-medium">ID: {vp.id}</h4>
-                      <button
-                        onClick={() => handleDeleteVP(vp.id)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                    <p className="mb-2">
-                      <span className="font-medium">소유자:</span> {vp.vp.holder}
-                    </p>
-                    <p className="mb-2">
-                      <span className="font-medium">포함된 VC 수:</span> {vp.vp.verifiableCredential.length}
-                    </p>
-                    <div className="mt-2">
-                      <p className="font-medium">VP 내용:</p>
-                      <pre className="bg-gray-100 p-2 rounded text-sm mt-1 max-h-40 overflow-y-auto">
-                        {JSON.stringify(vp.vp, null, 2)}
-                      </pre>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          {/* VP 검증 */}
-          {vpList.length > 0 && (
-            <div>
-              <h3 className="text-lg font-semibold mb-2">VP 검증</h3>
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-bold mb-2">
-                  검증할 VP 선택
-                </label>
-                <select
-                  value={vpToVerify}
-                  onChange={(e) => setVpToVerify(e.target.value)}
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                >
-                  <option value="">선택하세요</option>
-                  {vpList.map((vp) => (
-                    <option key={vp.id} value={vp.id}>
-                      {vp.id} - VC {vp.vp.verifiableCredential.length}개 포함
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <button
-                onClick={handleVerifyVP}
-                disabled={loading || !vpToVerify}
-                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-              >
-                {loading ? '검증 중...' : 'VP 검증하기'}
-              </button>
-              
-              {verifyResult && (
-                <div className="mt-4">
-                  <h4 className="font-medium mb-2">검증 결과:</h4>
-                  <div className={`p-3 rounded ${verifyResult.isValid ? 'bg-green-100' : 'bg-red-100'}`}>
-                    <p>{verifyResult.isValid ? '유효한 VP입니다.' : `유효하지 않은 VP: ${verifyResult.error}`}</p>
+              {selectedVp.verification_result && (
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold mb-2">검증 결과</h3>
+                  <div className="bg-gray-100 p-3 rounded">
+                    {(() => {
+                      const result = parseVerificationResult(selectedVp.verification_result);
+                      if (!result) return <p>검증 결과가 없습니다.</p>;
+                      
+                      return (
+                        <div>
+                          <div className={`p-2 mb-2 rounded ${result.signatureValid && result.ageVerified ? 'bg-green-100' : 'bg-red-100'}`}>
+                            <p className="font-medium">
+                              {result.signatureValid && result.ageVerified 
+                                ? '✅ 검증 성공' 
+                                : '❌ 검증 실패'}
+                            </p>
+                          </div>
+                          <div className="text-sm">
+                            <p><span className="font-medium">서명 유효성:</span> {result.signatureValid ? '유효함' : '유효하지 않음'}</p>
+                            <p><span className="font-medium">연령 검증:</span> {result.ageVerified ? '통과' : '실패'}</p>
+                            <p><span className="font-medium">실제 연령:</span> {result.actualAge}세</p>
+                            <p><span className="font-medium">요구 연령:</span> {result.requiredAge}세</p>
+                            <p><span className="font-medium">검증 시간:</span> {new Date(result.timestamp).toLocaleString()}</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
+              
+              <h3 className="text-lg font-semibold mb-2">VP 데이터</h3>
+              <div className="bg-gray-100 p-3 rounded overflow-x-auto max-h-96">
+                <pre className="text-sm break-all">
+                  {JSON.stringify(parseVpData(selectedVp.presentation_data), null, 2)}
+                </pre>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-gray-500">VP를 선택하세요.</p>
             </div>
           )}
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 };

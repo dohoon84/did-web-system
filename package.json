@@ -6,29 +6,55 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "dev:local": "cross-env NODE_ENV=development APP_ENV=local next dev --turbopack",
+    "dev:development": "cross-env NODE_ENV=development APP_ENV=development next dev --turbopack",
+    "dev:production": "cross-env NODE_ENV=production APP_ENV=production next dev --turbopack",
+    "start:local": "cross-env NODE_ENV=development APP_ENV=local next start",
+    "start:development": "cross-env NODE_ENV=development APP_ENV=development next start",
+    "start:production": "cross-env NODE_ENV=production APP_ENV=production next start",
+    "build:local": "cross-env NODE_ENV=development APP_ENV=local next build",
+    "build:development": "cross-env NODE_ENV=development APP_ENV=development next build",
+    "build:production": "cross-env NODE_ENV=production APP_ENV=production next build"
   },
   "dependencies": {
     "@transmute/did-key.js": "^0.3.0-unstable.10",
     "@transmute/vc.js": "^0.7.0-unstable.82",
+    "better-sqlite3": "^11.8.1",
     "jose": "^6.0.10",
     "next": "15.2.2",
     "next-swagger-doc": "^0.4.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "recharts": "^2.15.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-react": "^5.20.1",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "coffee-script": "^1.12.7",
+    "coffeescript": "^2.7.0",
+    "cross-env": "^7.0.3",
+    "cson": "^8.4.0",
+    "dotenv": "^16.4.7",
     "eslint": "^9",
     "eslint-config-next": "15.2.2",
+    "hjson": "^3.2.2",
+    "js-yaml": "^4.1.0",
+    "json5": "^2.2.3",
+    "properties": "^1.2.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "toml": "^3.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5",
+    "x2js": "^3.4.4",
+    "yaml": "^2.7.0"
   }
 }

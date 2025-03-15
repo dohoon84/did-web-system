@@ -1,5 +1,6 @@
 import { createVP } from '@/lib/did/vpUtils';
 import { NextRequest, NextResponse } from 'next/server';
+import { getAllVPs } from '@/lib/db/vpRepository';
 
 /**
  * @swagger
@@ -83,11 +84,15 @@ import { NextRequest, NextResponse } from 'next/server';
 // VP 목록 조회
 export async function GET() {
   try {
-    // 서버 측에서는 VP 목록을 데이터베이스에서 가져와야 하지만,
-    // 현재는 클라이언트 측 로컬 스토리지에 저장하므로 빈 배열 반환
-    return NextResponse.json([]);
+    // 데이터베이스에서 모든 VP 목록 가져오기
+    const vps = getAllVPs();
+    return NextResponse.json(vps);
   } catch (error: any) {
-    return NextResponse.json({ message: error.message || '알 수 없는 오류' }, { status: 500 });
+    console.error('VP 목록 조회 오류:', error);
+    return NextResponse.json(
+      { error: error.message || 'VP 목록 조회 중 오류가 발생했습니다.' }, 
+      { status: 500 }
+    );
   }
 }
 
