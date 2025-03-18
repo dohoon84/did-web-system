@@ -32,8 +32,8 @@ interface DID {
 
 const VpManager: React.FC = () => {
   const [vps, setVps] = useState<VP[]>([]);
-  const [vcs, setVcs] = useState<VC[]>([]);
-  const [dids, setDids] = useState<DID[]>([]);
+  const [vcs, setVcs] = useState<any[]>([]);
+  const [dids, setDids] = useState<any[]>([]);
   const [selectedVp, setSelectedVp] = useState<VP | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,13 +74,16 @@ const VpManager: React.FC = () => {
   const fetchVcs = async () => {
     try {
       const response = await fetch('/api/vc');
-      if (!response.ok) {
-        throw new Error('VC 목록을 불러오는데 실패했습니다.');
-      }
-      
       const data = await response.json();
-      setVcs(data);
-    } catch (err: any) {
+      
+      if (response.ok) {
+        // 응답 구조 확인 후 적절히 처리
+        const vcsArray = data.success ? data.vcs || [] : Array.isArray(data) ? data : [];
+        setVcs(vcsArray);
+      } else {
+        console.error('VC 목록을 불러오는데 실패했습니다:', data.message || '알 수 없는 오류');
+      }
+    } catch (err) {
       console.error('VC 목록 불러오기 오류:', err);
     }
   };
@@ -88,19 +91,21 @@ const VpManager: React.FC = () => {
   // DID 목록 불러오기
   const fetchDids = async () => {
     try {
+      setLoading(true);
       const response = await fetch('/api/did');
-      if (!response.ok) {
-        throw new Error('DID 목록을 불러오는데 실패했습니다.');
-      }
-      
       const data = await response.json();
-      setDids(data);
       
-      if (data.length > 0) {
-        setHolderDid(data[0].did);
+      if (response.ok) {
+        // 응답 구조 확인 후 적절히 처리
+        const didArray = data.success ? data.dids || [] : Array.isArray(data) ? data : [];
+        setDids(didArray);
+      } else {
+        setError(data.message || 'DID 목록을 불러오는데 실패했습니다.');
       }
-    } catch (err: any) {
-      console.error('DID 목록 불러오기 오류:', err);
+    } catch (error: any) {
+      setError(error.message || 'DID 목록을 불러오는데 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -248,11 +253,13 @@ const VpManager: React.FC = () => {
               required
             >
               <option value="">홀더 DID 선택</option>
-              {dids.map((did) => (
+              {Array.isArray(dids) ? dids.map((did) => (
                 <option key={did.id} value={did.did}>
                   {did.did}
                 </option>
-              ))}
+              )) : (
+                <option value="" disabled>DID 목록을 불러올 수 없습니다</option>
+              )}
             </select>
           </div>
           
@@ -264,7 +271,7 @@ const VpManager: React.FC = () => {
               {vcs.length === 0 ? (
                 <p className="text-gray-500">발급된 VC가 없습니다.</p>
               ) : (
-                vcs.map((vc) => (
+                Array.isArray(vcs) ? vcs.map((vc) => (
                   <div key={vc.id} className="flex items-center mb-2">
                     <input
                       type="checkbox"
@@ -277,7 +284,7 @@ const VpManager: React.FC = () => {
                       {vc.credential_type} - {new Date(vc.issuance_date).toLocaleDateString()}
                     </label>
                   </div>
-                ))
+                )) : <p className="text-gray-500">VC 데이터를 불러올 수 없습니다.</p>
               )}
             </div>
           </div>

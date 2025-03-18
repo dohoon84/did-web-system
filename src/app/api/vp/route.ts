@@ -1,4 +1,4 @@
-import { createVP } from '@/lib/did/vpUtils';
+import { createVerifiablePresentation } from '@/lib/vp/vpUtils';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllVPs } from '@/lib/db/vpRepository';
 
@@ -111,13 +111,11 @@ export async function POST(request: NextRequest) {
       expDate = new Date(expirationDate);
     }
     
-    const result = await createVP(
+    const result = await createVerifiablePresentation(
       holderDid, 
+      vcs,
       holderPrivateKey, 
-      vcs, 
-      challenge, 
-      domain, 
-      expDate
+      ['VerifiablePresentation']
     );
     
     return NextResponse.json(result, { status: 201 });

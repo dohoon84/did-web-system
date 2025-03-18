@@ -1,175 +1,263 @@
 import { v4 as uuidv4 } from 'uuid';
-import db from './index';
+import db from '../db';
 import { log } from '../logger';
+import { hashPresentation } from '../vp/vpUtils';
 
-export interface VerifiablePresentation {
+export interface VPRecord {
   id: string;
+  vp_id: string;
   holder_did: string;
-  verifier?: string;
-  presentation_data: string; // JSON 문자열
-  created_at?: string;
-  verification_result?: string; // JSON 문자열 (검증 결과)
-  verification_date?: string;
+  vp_hash: string;
+  vp_data: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface VPInput {
+  holder_did: string;
+  vp_data: string;
+  status?: string;
 }
 
 /**
- * 새 VP를 생성합니다.
+ * VP를 생성하고 저장합니다.
+ * @param vpData VP 데이터
+ * @returns 생성된 VP 레코드
  */
-export function createVP(vp: Omit<VerifiablePresentation, 'id' | 'created_at' | 'verification_result' | 'verification_date'>): VerifiablePresentation {
-  const id = uuidv4();
-  const now = new Date().toISOString();
-  
-  const stmt = db.prepare(`
-    INSERT INTO verifiable_presentations (
-      id, holder_did, verifier, presentation_data, created_at, updated_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  
-  stmt.run(
-    id,
-    vp.holder_did,
-    vp.verifier || null,
-    vp.presentation_data,
-    now,
-    now
-  );
-  
-  return {
-    id,
-    holder_did: vp.holder_did,
-    verifier: vp.verifier,
-    presentation_data: vp.presentation_data,
-    created_at: now
-  };
-}
-
-/**
- * ID로 VP를 조회합니다.
- */
-export function getVPById(id: string): VerifiablePresentation | null {
-  const stmt = db.prepare('SELECT * FROM verifiable_presentations WHERE id = ?');
-  return stmt.get(id) as VerifiablePresentation | null;
-}
-
-/**
- * 소유자(Holder) DID로 VP를 조회합니다.
- */
-export function getVPsByHolderDID(holderDid: string): VerifiablePresentation[] {
-  const stmt = db.prepare('SELECT * FROM verifiable_presentations WHERE holder_did = ? ORDER BY created_at DESC');
-  return stmt.all(holderDid) as VerifiablePresentation[];
-}
-
-/**
- * 검증자(Verifier)로 VP를 조회합니다.
- */
-export function getVPsByVerifier(verifier: string): VerifiablePresentation[] {
-  const stmt = db.prepare('SELECT * FROM verifiable_presentations WHERE verifier = ? ORDER BY created_at DESC');
-  return stmt.all(verifier) as VerifiablePresentation[];
-}
-
-/**
- * VP 검증 결과를 업데이트합니다.
- */
-export function updateVPVerificationResult(id: string, verificationResult: string): VerifiablePresentation | null {
-  const now = new Date().toISOString();
-  
+export function createVP(vpData: VPInput): VPRecord {
   try {
-    // verification_date 컬럼이 있는지 확인
-    const columnCheckStmt = db.prepare(`
-      PRAGMA table_info(verifiable_presentations)
+    const now = new Date().toISOString();
+    const id = uuidv4();
+    
+    // VP 객체 파싱
+    const vp = JSON.parse(vpData.vp_data);
+    const vpId = vp.id || `urn:uuid:${uuidv4()}`;
+    
+    // VP 해시 생성
+    const vpHash = hashPresentation(vp);
+    
+    // VP 상태 (기본값: active)
+    const status = vpData.status || 'active';
+    
+    // VP 저장
+    const stmt = db.prepare(`
+      INSERT INTO verifiable_presentations (
+        id, vp_id, holder_did, vp_hash, vp_data, status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const columns = columnCheckStmt.all();
-    const hasVerificationDateColumn = columns.some((col: any) => col.name === 'verification_date');
     
-    let stmt;
-    if (hasVerificationDateColumn) {
-      // verification_date 컬럼이 있는 경우
-      stmt = db.prepare(`
-        UPDATE verifiable_presentations
-        SET verification_result = ?, verification_date = ?, updated_at = ?
-        WHERE id = ?
-      `);
-      stmt.run(verificationResult, now, now, id);
-    } else {
-      // verification_date 컬럼이 없는 경우
-      stmt = db.prepare(`
-        UPDATE verifiable_presentations
-        SET verification_result = ?, updated_at = ?
-        WHERE id = ?
-      `);
-      stmt.run(verificationResult, now, id);
-      
-      // 컬럼 추가 시도
-      try {
-        db.exec(`ALTER TABLE verifiable_presentations ADD COLUMN verification_date TEXT`);
-        log.info('verification_date 컬럼이 추가되었습니다.');
-      } catch (alterError) {
-        log.error('verification_date 컬럼 추가 실패:', alterError);
-      }
-    }
+    stmt.run(
+      id,
+      vpId,
+      vpData.holder_did,
+      vpHash,
+      vpData.vp_data,
+      status,
+      now,
+      now
+    );
+    
+    // 저장된 VP 레코드 반환
+    return {
+      id,
+      vp_id: vpId,
+      holder_did: vpData.holder_did,
+      vp_hash: vpHash,
+      vp_data: vpData.vp_data,
+      status,
+      created_at: now,
+      updated_at: now
+    };
   } catch (error) {
-    log.error('VP 검증 결과 업데이트 오류:', error);
-    
-    // 기본 업데이트 시도 (verification_result만 업데이트)
-    try {
-      const fallbackStmt = db.prepare(`
-        UPDATE verifiable_presentations
-        SET verification_result = ?, updated_at = ?
-        WHERE id = ?
-      `);
-      fallbackStmt.run(verificationResult, now, id);
-    } catch (fallbackError) {
-      log.error('VP 검증 결과 기본 업데이트 실패:', fallbackError);
-    }
+    console.error('VP 생성 오류:', error);
+    throw error;
   }
-  
-  return getVPById(id);
 }
 
 /**
- * 최근 VP를 조회합니다.
+ * VP 상태를 업데이트합니다.
+ * @param vpId VP ID
+ * @param status 새로운 상태
+ * @returns 업데이트 성공 여부
  */
-export function getRecentVPs(limit: number = 10): VerifiablePresentation[] {
-  const stmt = db.prepare(`
-    SELECT * FROM verifiable_presentations
-    ORDER BY created_at DESC
-    LIMIT ?
-  `);
-  
-  return stmt.all(limit) as VerifiablePresentation[];
+export function updateVPStatus(vpId: string, status: string): boolean {
+  try {
+    const now = new Date().toISOString();
+    
+    const stmt = db.prepare(`
+      UPDATE verifiable_presentations
+      SET status = ?, updated_at = ?
+      WHERE id = ?
+    `);
+    
+    const result = stmt.run(status, now, vpId);
+    return result.changes > 0;
+  } catch (error) {
+    console.error('VP 상태 업데이트 오류:', error);
+    throw error;
+  }
 }
 
 /**
- * 검증된 VP를 조회합니다.
+ * VP를 ID로 조회합니다.
+ * @param vpId VP ID
+ * @returns 조회된 VP 레코드
  */
-export function getVerifiedVPs(): VerifiablePresentation[] {
-  const stmt = db.prepare(`
-    SELECT * FROM verifiable_presentations
-    WHERE verification_result IS NOT NULL
-    ORDER BY verification_date DESC
-  `);
-  
-  return stmt.all() as VerifiablePresentation[];
+export function getVPById(vpId: string): VPRecord | undefined {
+  try {
+    const stmt = db.prepare(`
+      SELECT * FROM verifiable_presentations
+      WHERE id = ?
+    `);
+    
+    return stmt.get(vpId) as VPRecord | undefined;
+  } catch (error) {
+    console.error('VP 조회 오류:', error);
+    throw error;
+  }
 }
 
 /**
- * 연령 검증 VP를 조회합니다 (presentation_data에 "AgeVerificationCredential" 포함).
+ * VP를 VP ID(W3C 표준 ID)로 조회합니다.
+ * @param vpStandardId W3C 표준 VP ID
+ * @returns 조회된 VP 레코드
  */
-export function getAgeVerificationVPs(holderDid: string): VerifiablePresentation[] {
-  const stmt = db.prepare(`
-    SELECT * FROM verifiable_presentations
-    WHERE holder_did = ? AND presentation_data LIKE ?
-    ORDER BY created_at DESC
-  `);
-  
-  return stmt.all(holderDid, '%AgeVerificationCredential%') as VerifiablePresentation[];
+export function getVPByStandardId(vpStandardId: string): VPRecord | undefined {
+  try {
+    const stmt = db.prepare(`
+      SELECT * FROM verifiable_presentations
+      WHERE vp_id = ?
+    `);
+    
+    return stmt.get(vpStandardId) as VPRecord | undefined;
+  } catch (error) {
+    console.error('VP 조회 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 특정 소유자(holder)의 모든 VP를 조회합니다.
+ * @param holderDid 소유자 DID
+ * @returns 조회된 VP 레코드 배열
+ */
+export function getVPsByHolder(holderDid: string): VPRecord[] {
+  try {
+    const stmt = db.prepare(`
+      SELECT * FROM verifiable_presentations
+      WHERE holder_did = ?
+      ORDER BY created_at DESC
+    `);
+    
+    return stmt.all(holderDid) as VPRecord[];
+  } catch (error) {
+    console.error('VP 조회 오류:', error);
+    throw error;
+  }
 }
 
 /**
  * 모든 VP를 조회합니다.
+ * @param limit 조회할 최대 항목 수
+ * @param offset 건너뛸 항목 수
+ * @returns 조회된 VP 레코드 배열
  */
-export function getAllVPs(): VerifiablePresentation[] {
-  const stmt = db.prepare('SELECT * FROM verifiable_presentations ORDER BY created_at DESC');
-  return stmt.all() as VerifiablePresentation[];
+export function getAllVPs(limit?: number, offset: number = 0): VPRecord[] {
+  try {
+    let query = `
+      SELECT * FROM verifiable_presentations
+      ORDER BY created_at DESC
+    `;
+    
+    if (limit !== undefined) {
+      query += ' LIMIT ? OFFSET ?';
+      return db.prepare(query).all(limit, offset) as VPRecord[];
+    } else {
+      return db.prepare(query).all() as VPRecord[];
+    }
+  } catch (error) {
+    console.error('VP 조회 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * VP를 삭제합니다.
+ * @param vpId VP ID
+ * @returns 삭제 성공 여부
+ */
+export function deleteVP(vpId: string): boolean {
+  try {
+    const stmt = db.prepare(`
+      DELETE FROM verifiable_presentations
+      WHERE id = ?
+    `);
+    
+    const result = stmt.run(vpId);
+    return result.changes > 0;
+  } catch (error) {
+    console.error('VP 삭제 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 최근 VP를 조회합니다.
+ * @param limit 조회할 최대 항목 수
+ * @returns 조회된 VP 레코드 배열
+ */
+export function getRecentVPs(limit: number = 10): VPRecord[] {
+  try {
+    const stmt = db.prepare(`
+      SELECT * FROM verifiable_presentations
+      ORDER BY created_at DESC
+      LIMIT ?
+    `);
+    
+    return stmt.all(limit) as VPRecord[];
+  } catch (error) {
+    console.error('VP 조회 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 특정 타입의 VP를 조회합니다.
+ * @param type VP 타입
+ * @returns 조회된 VP 레코드 배열
+ */
+export function getVPsByType(type: string): VPRecord[] {
+  try {
+    const stmt = db.prepare(`
+      SELECT * FROM verifiable_presentations
+      WHERE vp_data LIKE ?
+      ORDER BY created_at DESC
+    `);
+    
+    return stmt.all(`%"type":%${type}%`) as VPRecord[];
+  } catch (error) {
+    console.error('VP 조회 오류:', error);
+    throw error;
+  }
+}
+
+/**
+ * 연령 검증 VP를 조회합니다 (vp_data에 "AgeVerificationCredential" 포함).
+ * @param holderDid 소유자 DID
+ * @returns 조회된 VP 레코드 배열
+ */
+export function getAgeVerificationVPs(holderDid: string): VPRecord[] {
+  try {
+    const stmt = db.prepare(`
+      SELECT * FROM verifiable_presentations
+      WHERE holder_did = ? AND vp_data LIKE ?
+      ORDER BY created_at DESC
+    `);
+    
+    return stmt.all(holderDid, '%AgeVerificationCredential%') as VPRecord[];
+  } catch (error) {
+    console.error('VP 조회 오류:', error);
+    throw error;
+  }
 } 
