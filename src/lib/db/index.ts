@@ -41,6 +41,8 @@ function initTables() {
       if (!tableCheck) {
         log.info('필수 테이블이 없습니다. 테이블을 생성합니다.');
       } else {
+        // 기존 테이블이 있으면 마이그레이션 실행
+        migrateDatabase();
         return; // 테이블이 이미 존재하면 초기화 건너뛰기
       }
     } catch (err) {
@@ -49,7 +51,7 @@ function initTables() {
   } else {
     log.info('새 데이터베이스 파일을 생성합니다. 테이블을 초기화합니다.');
   }
-
+    
   // 사용자 테이블
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -121,7 +123,114 @@ function initTables() {
     )
   `);
 
+  // 블록체인 트랜잭션 테이블
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS blockchain_transactions (
+      id TEXT PRIMARY KEY,
+      did TEXT NOT NULL,
+      transaction_hash TEXT NOT NULL,
+      transaction_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (did) REFERENCES dids(did)
+    )
+  `);
+
+  // VC 블록체인 트랜잭션 테이블
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS vc_blockchain_transactions (
+      id TEXT PRIMARY KEY,
+      vc_id TEXT NOT NULL,
+      transaction_hash TEXT NOT NULL,
+      transaction_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (vc_id) REFERENCES verifiable_credentials(id)
+    )
+  `);
+
   log.info('데이터베이스 테이블이 초기화되었습니다.');
+}
+
+// 데이터베이스 마이그레이션 함수
+function migrateDatabase() {
+  log.info('데이터베이스 마이그레이션 시작...');
+  
+  try {
+    // 트랜잭션 시작
+    db.exec('BEGIN TRANSACTION');
+    
+    // blockchain_transactions 테이블이 존재하는지 확인
+    const btTableExists = db.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='blockchain_transactions'
+    `).get();
+    
+    if (btTableExists) {
+      log.info('blockchain_transactions 테이블이 존재합니다. 컬럼 확인 중...');
+      
+      // error_message 컬럼이 존재하는지 확인
+      const columns = db.prepare("PRAGMA table_info(blockchain_transactions)").all();
+      const hasErrorMessageColumn = columns.some((column: any) => column.name === 'error_message');
+      
+      if (!hasErrorMessageColumn) {
+        log.info('error_message 컬럼이 없습니다. 추가합니다...');
+        
+        // error_message 컬럼 추가
+        db.prepare(`
+          ALTER TABLE blockchain_transactions 
+          ADD COLUMN error_message TEXT
+        `).run();
+        
+        log.info('error_message 컬럼이 추가되었습니다.');
+      } else {
+        log.info('error_message 컬럼이 이미 존재합니다.');
+      }
+    } else {
+      log.info('blockchain_transactions 테이블이 존재하지 않습니다. 테이블 초기화 시 생성됩니다.');
+    }
+    
+    // vc_blockchain_transactions 테이블이 존재하는지 확인
+    const vcTableExists = db.prepare(`
+      SELECT name FROM sqlite_master 
+      WHERE type='table' AND name='vc_blockchain_transactions'
+    `).get();
+    
+    if (!vcTableExists) {
+      log.info('vc_blockchain_transactions 테이블이 존재하지 않습니다. 테이블을 생성합니다...');
+      
+      // vc_blockchain_transactions 테이블 생성
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS vc_blockchain_transactions (
+          id TEXT PRIMARY KEY,
+          vc_id TEXT NOT NULL,
+          transaction_hash TEXT NOT NULL,
+          transaction_type TEXT NOT NULL,
+          status TEXT NOT NULL,
+          error_message TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (vc_id) REFERENCES verifiable_credentials(id)
+        )
+      `);
+      
+      log.info('vc_blockchain_transactions 테이블이 생성되었습니다.');
+    } else {
+      log.info('vc_blockchain_transactions 테이블이 이미 존재합니다.');
+    }
+    
+    // 트랜잭션 커밋
+    db.exec('COMMIT');
+    log.info('데이터베이스 마이그레이션 완료');
+  } catch (error) {
+    // 오류 발생 시 롤백
+    db.exec('ROLLBACK');
+    log.error(`데이터베이스 마이그레이션 오류: ${error}`);
+  }
 }
 
 // 테이블 초기화 실행

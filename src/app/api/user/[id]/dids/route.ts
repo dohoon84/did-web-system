@@ -43,7 +43,11 @@ export async function GET(
     // 사용자의 DID 목록 조회
     const dids = await getDIDsByUserId(userId);
     
-    return NextResponse.json(dids);
+    // 응답 구조를 통일하여 success 필드 포함
+    return NextResponse.json({
+      success: true,
+      dids: dids
+    });
   } catch (error) {
     console.error('사용자 DID 목록 조회 중 오류 발생:', error);
     return NextResponse.json(

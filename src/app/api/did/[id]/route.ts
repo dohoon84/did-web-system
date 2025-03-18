@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { deleteDID, getDIDById } from '@/lib/db/didRepository';
+import { DIDService } from '@/lib/did/didService';
 import { resolveDid } from '@/lib/did/didUtils';
+import { log } from '@/lib/logger';
+
 
 /**
  * @swagger
@@ -113,5 +116,76 @@ export async function DELETE(
       { success: false, message: 'DID 삭제 중 오류가 발생했습니다.' },
       { status: 500 }
     );
+  }
+}
+
+/**
+ * POST /api/did/[id]/revoke
+ * DID 폐기 API
+ * 
+ * @swagger
+ * /api/did/{did}/revoke:
+ *   post:
+ *     summary: DID를 폐기합니다.
+ *     description: 지정된 DID를 폐기하고, 관련된 모든 VC도 함께 폐기합니다.
+ *     parameters:
+ *       - in: path
+ *         name: did
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 폐기할 DID
+ *     responses:
+ *       200:
+ *         description: 성공적으로 폐기됨
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 status:
+ *                   type: string
+ *       404:
+ *         description: DID를 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const id = params.id;
+  try {
+    log.info(`DID ${id} 폐기 요청`);
+    
+    const didService = new DIDService();
+    const result = await didService.revokeDID(id);
+    
+    return NextResponse.json(result);
+  } catch (error) {
+    log.error('DID 폐기 오류:', error);
+    
+    if (error instanceof Error && error.message.includes('찾을 수 없습니다')) {
+      return NextResponse.json({
+        success: false,
+        message: error.message
+      }, { status: 404 });
+    }
+    
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : '내부 서버 오류';
+      
+    log.error(`DID ${id} 폐기 실패: ${errorMessage}`);
+    
+    return NextResponse.json({
+      success: false,
+      message: `DID 폐기 중 오류가 발생했습니다: ${errorMessage}`,
+      did: id
+    }, { status: 500 });
   }
 } 

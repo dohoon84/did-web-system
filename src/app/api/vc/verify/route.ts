@@ -1,6 +1,9 @@
-import { verifyVC } from '@/lib/did/vcUtils';
-import { resolveDid } from '@/lib/did/didUtils';
 import { NextRequest, NextResponse } from 'next/server';
+import { VCService } from '@/lib/vc/vcService';
+import { log } from '@/lib/logger';
+
+// VC 서비스 인스턴스 생성
+const vcService = new VCService();
 
 /**
  * @swagger
@@ -16,15 +19,11 @@ import { NextRequest, NextResponse } from 'next/server';
  *           schema:
  *             type: object
  *             required:
- *               - vcJws
- *               - issuerDid
+ *               - vcId
  *             properties:
- *               vcJws:
+ *               vcId:
  *                 type: string
- *                 description: 검증할 VC의 JWS
- *               issuerDid:
- *                 type: string
- *                 description: 발급자 DID
+ *                 description: VC의 ID
  *     responses:
  *       200:
  *         description: 검증 결과
@@ -33,14 +32,15 @@ import { NextRequest, NextResponse } from 'next/server';
  *             schema:
  *               type: object
  *               properties:
- *                 isValid:
+ *                 success:
  *                   type: boolean
+ *                 valid:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
  *                 vc:
  *                   type: object
  *                   description: 검증된 VC 내용 (유효한 경우)
- *                 error:
- *                   type: string
- *                   description: 오류 메시지 (유효하지 않은 경우)
  *       400:
  *         description: 잘못된 요청
  *         content:
@@ -55,27 +55,48 @@ import { NextRequest, NextResponse } from 'next/server';
  *               $ref: '#/components/schemas/Error'
  */
 
-export async function POST(request: NextRequest) {
+/**
+ * POST /api/vc/verify
+ * VC 검증
+ */
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
-    const { vcJws, issuerDid } = body;
+    const { vcId } = await req.json();
     
-    if (!vcJws || !issuerDid) {
-      return NextResponse.json({ message: '필수 필드가 누락되었습니다.' }, { status: 400 });
+    if (!vcId) {
+      return NextResponse.json({
+        success: false,
+        message: 'VC ID가 필요합니다.'
+      }, { status: 400 });
     }
     
-    // 발급자의 DID Document 조회
-    const issuerDidDocument = await resolveDid(issuerDid);
+    // VC 조회
+    const vc = vcService.getVCById(vcId);
     
-    if (!issuerDidDocument) {
-      return NextResponse.json({ message: '발급자 DID를 찾을 수 없습니다.' }, { status: 400 });
+    if (!vc) {
+      return NextResponse.json({
+        success: false,
+        valid: false,
+        message: `ID가 ${vcId}인 VC를 찾을 수 없습니다.`
+      }, { status: 404 });
     }
     
     // VC 검증
-    const result = await verifyVC(vcJws, issuerDidDocument);
+    const verificationResult = await vcService.verifyVC(vc);
     
-    return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message || '알 수 없는 오류' }, { status: 500 });
+    return NextResponse.json({
+      success: true,
+      valid: verificationResult.valid,
+      message: verificationResult.message,
+      vc
+    });
+  } catch (error) {
+    log.error('VC 검증 오류:', error);
+    
+    return NextResponse.json({ 
+      success: false,
+      valid: false,
+      message: error instanceof Error ? error.message : '내부 서버 오류'
+    }, { status: 500 });
   }
 } 
