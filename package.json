@@ -18,6 +18,7 @@
     "build:production": "cross-env NODE_ENV=production APP_ENV=production next build"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^7.3.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^6.4.8",
@@ -38,7 +39,8 @@
     "swagger-ui-react": "^5.20.1",
     "uuid": "^11.1.0",
     "web3": "^4.16.0",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

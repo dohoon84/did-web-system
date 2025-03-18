@@ -9,6 +9,7 @@ import { issueSimpleVC } from '@/lib/vc/vcUtils';
  * /api/vc/issue/age:
  *   post:
  *     summary: 연령 인증 VC를 발급합니다.
+ *     tags: [Demo, VC]
  *     description: 사용자의 연령 정보를 검증하고 연령 인증 VC를 발급합니다.
  *     requestBody:
  *       required: true
