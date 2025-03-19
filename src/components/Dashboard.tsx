@@ -268,7 +268,16 @@ const Dashboard: React.FC = () => {
       const didsResponse = await fetch(`/api/did?limit=${didPageSize}&offset=${offset}`);
       if (didsResponse.ok) {
         const didsData = await didsResponse.json();
-        setRecentDids(didsData);
+        
+        // API 응답 구조에 맞게 처리
+        if (didsData.success && Array.isArray(didsData.dids)) {
+          setRecentDids(didsData.dids);
+        } else if (Array.isArray(didsData)) {
+          setRecentDids(didsData);
+        } else {
+          console.error('최근 DID 목록 응답 형식 오류:', didsData);
+          setRecentDids([]);
+        }
       } else {
         console.error('최근 DID 목록을 불러오는데 실패했습니다.');
         setRecentDids([]);
@@ -285,7 +294,16 @@ const Dashboard: React.FC = () => {
       const vcsResponse = await fetch(`/api/vc?limit=${vcPageSize}&offset=${offset}`);
       if (vcsResponse.ok) {
         const vcsData = await vcsResponse.json();
-        setRecentVcs(vcsData);
+        
+        // API 응답 구조에 맞게 처리
+        if (vcsData.success && Array.isArray(vcsData.vcs)) {
+          setRecentVcs(vcsData.vcs);
+        } else if (Array.isArray(vcsData)) {
+          setRecentVcs(vcsData);
+        } else {
+          console.error('최근 VC 목록 응답 형식 오류:', vcsData);
+          setRecentVcs([]);
+        }
       } else {
         console.error('최근 VC 목록을 불러오는데 실패했습니다.');
         setRecentVcs([]);

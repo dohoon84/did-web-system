@@ -7,8 +7,8 @@ server:
 
 database:
   type: sqlite
-  path: ./data/did-system-local.db
+  path: ./data/database.sqlite
   initialize: true
 
 logging:
-  level: debug  # 로컬 환경에서는 더 자세한 로그 출력 
+  level: warn  # 로컬 환경에서는 필요한 경고 및 오류만 출력 

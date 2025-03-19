@@ -19,7 +19,7 @@ const dbExists = fs.existsSync(dbPath);
 
 // 데이터베이스 연결
 const db = new Database(dbPath);
-log.info(`SQLite 데이터베이스에 연결되었습니다: ${dbPath}`);
+log.debug(`SQLite 데이터베이스에 연결되었습니다: ${dbPath}`);
 
 // 테이블 초기화
 function initTables() {
@@ -27,19 +27,19 @@ function initTables() {
   const shouldInitialize = appConfig.database.initialize;
   
   if (!shouldInitialize) {
-    log.info('데이터베이스 초기화가 비활성화되어 있습니다.');
+    log.debug('데이터베이스 초기화가 비활성화되어 있습니다.');
     return;
   }
 
   // 데이터베이스 파일이 이미 존재하면 테이블 초기화 건너뛰기
   if (dbExists) {
-    log.info('데이터베이스 파일이 이미 존재합니다. 테이블 초기화를 건너뜁니다.');
+    log.debug('데이터베이스 파일이 이미 존재합니다. 테이블 초기화를 건너뜁니다.');
     
     // 테이블 존재 여부 확인
     try {
       const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='verifiable_credentials'").get();
       if (!tableCheck) {
-        log.info('필수 테이블이 없습니다. 테이블을 생성합니다.');
+        log.debug('필수 테이블이 없습니다. 테이블을 생성합니다.');
       } else {
         // 기존 테이블이 있으면 마이그레이션 실행
         migrateDatabase();
@@ -49,7 +49,7 @@ function initTables() {
       log.error(`테이블 확인 중 오류 발생: ${err}`);
     }
   } else {
-    log.info('새 데이터베이스 파일을 생성합니다. 테이블을 초기화합니다.');
+    log.debug('새 데이터베이스 파일을 생성합니다. 테이블을 초기화합니다.');
   }
     
   // 사용자 테이블
@@ -158,7 +158,7 @@ function initTables() {
 
 // 데이터베이스 마이그레이션 함수
 function migrateDatabase() {
-  log.info('데이터베이스 마이그레이션 시작...');
+  log.debug('데이터베이스 마이그레이션 시작...');
   
   try {
     // 트랜잭션 시작
@@ -171,14 +171,14 @@ function migrateDatabase() {
     `).get();
     
     if (btTableExists) {
-      log.info('blockchain_transactions 테이블이 존재합니다. 컬럼 확인 중...');
+      log.debug('blockchain_transactions 테이블이 존재합니다. 컬럼 확인 중...');
       
       // error_message 컬럼이 존재하는지 확인
       const columns = db.prepare("PRAGMA table_info(blockchain_transactions)").all();
       const hasErrorMessageColumn = columns.some((column: any) => column.name === 'error_message');
       
       if (!hasErrorMessageColumn) {
-        log.info('error_message 컬럼이 없습니다. 추가합니다...');
+        log.debug('error_message 컬럼이 없습니다. 추가합니다...');
         
         // error_message 컬럼 추가
         db.prepare(`
@@ -186,12 +186,12 @@ function migrateDatabase() {
           ADD COLUMN error_message TEXT
         `).run();
         
-        log.info('error_message 컬럼이 추가되었습니다.');
+        log.debug('error_message 컬럼이 추가되었습니다.');
       } else {
-        log.info('error_message 컬럼이 이미 존재합니다.');
+        log.debug('error_message 컬럼이 이미 존재합니다.');
       }
     } else {
-      log.info('blockchain_transactions 테이블이 존재하지 않습니다. 테이블 초기화 시 생성됩니다.');
+      log.debug('blockchain_transactions 테이블이 존재하지 않습니다. 테이블 초기화 시 생성됩니다.');
     }
     
     // vc_blockchain_transactions 테이블이 존재하는지 확인
@@ -201,7 +201,7 @@ function migrateDatabase() {
     `).get();
     
     if (!vcTableExists) {
-      log.info('vc_blockchain_transactions 테이블이 존재하지 않습니다. 테이블을 생성합니다...');
+      log.debug('vc_blockchain_transactions 테이블이 존재하지 않습니다. 테이블을 생성합니다...');
       
       // vc_blockchain_transactions 테이블 생성
       db.exec(`
@@ -218,9 +218,9 @@ function migrateDatabase() {
         )
       `);
       
-      log.info('vc_blockchain_transactions 테이블이 생성되었습니다.');
+      log.debug('vc_blockchain_transactions 테이블이 생성되었습니다.');
     } else {
-      log.info('vc_blockchain_transactions 테이블이 이미 존재합니다.');
+      log.debug('vc_blockchain_transactions 테이블이 이미 존재합니다.');
     }
     
     // VP 테이블 스키마 검사 및 업데이트
@@ -231,7 +231,7 @@ function migrateDatabase() {
 
     if (vpTableCheck) {
       // VP 테이블이 존재하면 컬럼 검사
-      log.info('VP 테이블이 존재합니다. 스키마 업데이트 검사 중...');
+      log.debug('VP 테이블이 존재합니다. 스키마 업데이트 검사 중...');
       
       const vpColumns = db.prepare("PRAGMA table_info(verifiable_presentations)").all();
       const columnNames = vpColumns.map((col: any) => col.name);
@@ -242,14 +242,14 @@ function migrateDatabase() {
       const hasStatusColumn = columnNames.includes('status');
       
       if (!hasVpIdColumn || !hasVpHashColumn || !hasStatusColumn) {
-        log.info('VP 테이블 스키마가 일치하지 않습니다. 테이블을 재생성합니다...');
+        log.debug('VP 테이블 스키마가 일치하지 않습니다. 테이블을 재생성합니다...');
         
         // 기존 데이터 백업
         db.exec(`
           CREATE TABLE IF NOT EXISTS verifiable_presentations_backup AS
           SELECT * FROM verifiable_presentations
         `);
-        log.info('VP 테이블 데이터를 백업했습니다.');
+        log.debug('VP 테이블 데이터를 백업했습니다.');
         
         // 기존 테이블 삭제
         db.exec(`DROP TABLE verifiable_presentations`);
@@ -267,7 +267,7 @@ function migrateDatabase() {
             updated_at TEXT NOT NULL
           )
         `);
-        log.info('VP 테이블을 새 스키마로 재생성했습니다.');
+        log.debug('VP 테이블을 새 스키마로 재생성했습니다.');
         
         try {
           // 백업에서 복원 시도 (새 컬럼은 null 또는 기본값으로 설정)
@@ -287,22 +287,22 @@ function migrateDatabase() {
               updated_at
             FROM verifiable_presentations_backup
           `);
-          log.info('VP 테이블 데이터를 복원했습니다.');
+          log.debug('VP 테이블 데이터를 복원했습니다.');
         } catch (restoreError) {
           log.error(`VP 테이블 데이터 복원 중 오류 발생: ${restoreError}`);
-          log.info('데이터 복원 실패, 신규 테이블을 사용합니다.');
+          log.debug('데이터 복원 실패, 신규 테이블을 사용합니다.');
         }
         
         // 백업 테이블 삭제 (선택 사항)
         db.exec(`DROP TABLE IF EXISTS verifiable_presentations_backup`);
       } else {
-        log.info('VP 테이블 스키마가 이미 최신 상태입니다.');
+        log.debug('VP 테이블 스키마가 이미 최신 상태입니다.');
       }
     }
     
     // 트랜잭션 커밋
     db.exec('COMMIT');
-    log.info('데이터베이스 마이그레이션 완료');
+    log.debug('데이터베이스 마이그레이션 완료');
   } catch (error) {
     // 오류 발생 시 롤백
     db.exec('ROLLBACK');
@@ -319,6 +319,6 @@ export default db;
 export function closeDatabase() {
   if (db) {
     db.close();
-    log.info('데이터베이스 연결이 종료되었습니다.');
+    log.debug('데이터베이스 연결이 종료되었습니다.');
   }
 } 

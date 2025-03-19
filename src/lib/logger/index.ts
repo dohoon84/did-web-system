@@ -37,8 +37,6 @@ const logger = winston.createLogger({
   levels,
   format,
   transports: [
-    // 콘솔 출력
-    new winston.transports.Console(),
     // 파일 출력 (에러 로그)
     new winston.transports.File({
       filename: 'logs/error.log',
@@ -49,9 +47,17 @@ const logger = winston.createLogger({
   ],
 });
 
-// 개발 환경에서는 더 자세한 로그 출력
-if (appConfig.env === 'development' || appConfig.env === 'local') {
-  logger.level = 'debug';
+// 콘솔 출력 (개발/로컬 환경 또는 명시적으로 설정된 경우에만)
+if (process.env.NODE_ENV !== 'production' || process.env.CONSOLE_LOG === 'true') {
+  logger.add(
+    new winston.transports.Console({
+      level: appConfig.logging.level, // config 설정을 따름
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      ),
+    })
+  );
 }
 
 // 로그 함수 정의
