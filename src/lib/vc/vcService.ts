@@ -12,7 +12,7 @@ import {
   getVCBlockchainTransactions,
   VCBlockchainTransaction
 } from '../db/vcRepository';
-import { DID_REGISTRY_ABI, DID_REGISTRY_ADDRESS, RPC_URL } from '../did/web3.config';
+import { DID_REGISTRY_ABI, DID_REGISTRY_ADDRESS_CONFIG, RPC_URL_CONFIG } from '../did/web3.config';
 import { v4 as uuidv4 } from 'uuid';
 import { log } from '../logger';
 
@@ -41,9 +41,9 @@ export class VCService {
   private didRegistryContract: DIDRegistryContract;
 
   constructor() {
-    this.provider = new ethers.JsonRpcProvider(RPC_URL);
+    this.provider = new ethers.JsonRpcProvider(RPC_URL_CONFIG);
     this.didRegistryContract = new ethers.Contract(
-      DID_REGISTRY_ADDRESS,
+      DID_REGISTRY_ADDRESS_CONFIG,
       DID_REGISTRY_ABI,
       this.provider
     ) as DIDRegistryContract;

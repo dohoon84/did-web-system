@@ -12,6 +12,7 @@ services:
       - "8080:3000"
     volumes:
       - ./data:/app/data
+      - ./config:/app/config
       - ./logs:/app/logs
     environment:
       - NODE_ENV=production
@@ -19,6 +20,7 @@ services:
       - PORT=3000
       - HOST=0.0.0.0
       - NEXT_TELEMETRY_DISABLED=1
+      - BLOCKCHAIN_CONFIG_PATH=/app/config/blockchain.json
     networks:
       - did-network
 

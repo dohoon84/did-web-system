@@ -1,9 +1,10 @@
-import { DIDDocument, createDIDDocument, generateKeyPair, hashDIDDocument, validateDIDDocument } from './didUtils';
+
 import db from '../db';
 import { v4 as uuidv4 } from 'uuid';
 import { ethers } from 'ethers';
-import { DID_REGISTRY_ADDRESS, DID_REGISTRY_ABI, RPC_URL } from './web3.config';
+import { DID_REGISTRY_ADDRESS_CONFIG, DID_REGISTRY_ABI, RPC_URL_CONFIG } from './web3.config';
 import { getUserById } from '../db/userRepository';
+import { DIDDocument, createDIDDocument, generateKeyPair, hashDIDDocument, validateDIDDocument } from './didUtils';
 
 
 interface DIDBlockchainInfo {
@@ -58,9 +59,9 @@ export class DIDService {
   private didRegistryContract: DIDRegistryContract;
 
   constructor() {
-    this.provider = new ethers.JsonRpcProvider(RPC_URL);
+    this.provider = new ethers.JsonRpcProvider(RPC_URL_CONFIG);
     this.didRegistryContract = new ethers.Contract(
-      DID_REGISTRY_ADDRESS,
+      DID_REGISTRY_ADDRESS_CONFIG,
       DID_REGISTRY_ABI,
       this.provider
     ) as DIDRegistryContract;

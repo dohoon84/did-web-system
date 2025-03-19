@@ -3,6 +3,7 @@
 이 프로젝트는 DID(Decentralized Identifier)를 활용한 연령 인증 시스템의 MVP(Minimum Viable Product)입니다. 사용자는 자신의 DID를 생성하고, 연령 정보가 포함된 VC(Verifiable Credential)를 발급받아 VP(Verifiable Presentation)를 통해 성인 인증을 수행할 수 있습니다.
 
 ## 구현된 기능
+- DID, VC, VP 관련 기능은 모두 블록체인에 기록되고 관리됩니다.
 
 ### 1. DID 관리
 - DID 생성 및 조회
