@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { issueSimpleVC } from '@/lib/did/vcUtils';
 import { getDIDByDIDString } from '@/lib/db/didRepository';
 import { createVC as createVCRecord } from '@/lib/db/vcRepository';
 import { getUserById, calculateAge } from '@/lib/db/userRepository';
+import { issueSimpleVC } from '@/lib/vc/vcUtils';
 
 /**
  * @swagger
  * /api/vc/issue/age:
  *   post:
  *     summary: 연령 인증 VC를 발급합니다.
+ *     tags: [Demo, VC]
  *     description: 사용자의 연령 정보를 검증하고 연령 인증 VC를 발급합니다.
  *     requestBody:
  *       required: true

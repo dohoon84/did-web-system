@@ -1,12 +1,15 @@
-import VcManager from '@/components/VcManager';
+import VCManager from '../components/VCManager';
+import type { Metadata } from 'next';
 
-export default function VcManagementPage() {
+export const metadata: Metadata = {
+  title: 'VC 관리 | DID 관리 시스템',
+  description: 'Verifiable Credential 발급, 조회, 폐기 및 검증을 관리합니다.',
+};
+
+export default function VCManagementPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center p-8">
-      <div className="w-full max-w-6xl">
-        <h1 className="text-3xl font-bold mb-6">VC 관리</h1>
-        <VcManager />
-      </div>
-    </main>
+    <div>
+      <VCManager />
+    </div>
   );
 } 

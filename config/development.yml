@@ -8,7 +8,7 @@ server:
 database:
   type: sqlite
   path: ./data/did-system-dev.db
-  initialize: false
+  initialize: true
 
 logging:
   level: info 

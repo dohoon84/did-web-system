@@ -16,9 +16,17 @@ interface DID {
   did: string;
   did_document: string;
   user_id?: string;
-  status: 'active' | 'revoked' | 'suspended';
+  status: 'active' | 'revoked' | 'suspended' | 'error';
   created_at: string;
   updated_at: string;
+  transaction_hash?: string;
+  error_message?: string;
+}
+
+interface APIResponse {
+  success: boolean;
+  message?: string;
+  dids?: DID[];
 }
 
 const UserManager: React.FC = () => {
@@ -46,11 +54,17 @@ const UserManager: React.FC = () => {
       }
       
       const data = await response.json();
-      setUsers(data);
       
-      if (data.length > 0 && !selectedUser) {
-        setSelectedUser(data[0]);
-        fetchUserDids(data[0].id);
+      if (data.success === false) {
+        throw new Error(data.message || '사용자 목록을 불러오는데 실패했습니다.');
+      }
+      
+      const userList = data.users || data; // 호환성을 위해 양쪽 형식 모두 지원
+      setUsers(userList);
+      
+      if (userList.length > 0 && !selectedUser) {
+        setSelectedUser(userList[0]);
+        fetchUserDids(userList[0].id);
       }
     } catch (err: any) {
       setError(err.message || '알 수 없는 오류가 발생했습니다.');
@@ -70,8 +84,16 @@ const UserManager: React.FC = () => {
         throw new Error('사용자의 DID 목록을 불러오는데 실패했습니다.');
       }
       
-      const data = await response.json();
-      setUserDids(data);
+      const data = await response.json() as DID[] | APIResponse;
+      
+      // API 응답 구조 확인 - 배열이거나 {success, dids} 형태
+      if (Array.isArray(data)) {
+        setUserDids(data);
+      } else if (data.success === false) {
+        throw new Error(data.message || '사용자의 DID 목록을 불러오는데 실패했습니다.');
+      } else {
+        setUserDids(data.dids || []);
+      }
     } catch (err: any) {
       console.error('사용자 DID 목록 불러오기 오류:', err);
       setUserDids([]);
@@ -117,12 +139,15 @@ const UserManager: React.FC = () => {
         }),
       });
       
+      const responseData = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '사용자 생성에 실패했습니다.');
+        throw new Error(responseData.message || responseData.error || '사용자 생성에 실패했습니다.');
       }
       
-      const data = await response.json();
+      if (responseData.success === false) {
+        throw new Error(responseData.message || '사용자 생성에 실패했습니다.');
+      }
       
       // 폼 초기화
       setNewUserName('');
@@ -156,9 +181,14 @@ const UserManager: React.FC = () => {
         method: 'DELETE',
       });
       
+      const responseData = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '사용자 삭제에 실패했습니다.');
+        throw new Error(responseData.message || responseData.error || '사용자 삭제에 실패했습니다.');
+      }
+      
+      if (responseData.success === false) {
+        throw new Error(responseData.message || '사용자 삭제에 실패했습니다.');
       }
       
       // 유저 목록 다시 불러오기
@@ -196,9 +226,14 @@ const UserManager: React.FC = () => {
         }),
       });
       
+      const responseData = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'DID 생성에 실패했습니다.');
+        throw new Error(responseData.message || responseData.error || 'DID 생성에 실패했습니다.');
+      }
+      
+      if (responseData.success === false) {
+        throw new Error(responseData.message || 'DID 생성에 실패했습니다.');
       }
       
       // 유저의 DID 목록 다시 불러오기
@@ -214,8 +249,8 @@ const UserManager: React.FC = () => {
   };
 
   // DID 폐기 함수
-  const handleRevokeDid = async (didId: string) => {
-    if (!confirm('정말로 이 DID를 폐기하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+  const handleRevokeDid = async (did: string) => {
+    if (!confirm('정말로 이 DID를 폐기하시겠습니까?\n\n폐기된 DID는 더 이상 사용할 수 없으며, 이 DID로 발급된 모든 VC도 함께 폐기됩니다. 이 작업은 되돌릴 수 없습니다.')) {
       return;
     }
     
@@ -224,21 +259,45 @@ const UserManager: React.FC = () => {
       setError(null);
       setSuccess(null);
       
-      const response = await fetch(`/api/did/${didId}/revoke`, {
-        method: 'PUT',
+      const response = await fetch(`/api/did/${did}/revoke`, {
+        method: 'POST',
       });
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'DID 폐기에 실패했습니다.');
+      // 응답 본문이 비어있는지 확인
+      const responseText = await response.text();
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('서버 응답이 비어있습니다.');
       }
       
-      // 유저의 DID 목록 다시 불러오기
+      // JSON 파싱 시도
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonError) {
+        console.error('JSON 파싱 오류:', jsonError, '원본 텍스트:', responseText);
+        throw new Error(`JSON 파싱 오류: ${jsonError instanceof Error ? jsonError.message : '알 수 없는 오류'}`);
+      }
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'DID 폐기에 실패했습니다.');
+      }
+      
+      if (!data.success) {
+        throw new Error(data.message || 'DID 폐기에 실패했습니다.');
+      }
+      
+      // 경고 표시 (블록체인 오류가 있지만 DB 폐기는 성공한 경우)
+      if (data.error) {
+        setError(`경고: ${data.error}`);
+        setSuccess(data.message || 'DID가 부분적으로 폐기되었습니다. 블록체인 연동 중 오류가 발생했습니다.');
+      } else {
+        setSuccess(data.message || 'DID가 성공적으로 폐기되었습니다.');
+      }
+      
+      // 현재 선택된 사용자의 DID 목록 다시 불러오기
       if (selectedUser) {
         fetchUserDids(selectedUser.id);
       }
-      
-      setSuccess('DID가 성공적으로 폐기되었습니다.');
     } catch (err: any) {
       setError(err.message || '알 수 없는 오류가 발생했습니다.');
       console.error('DID 폐기 오류:', err);
@@ -275,6 +334,8 @@ const UserManager: React.FC = () => {
         return 'bg-red-100 text-red-800';
       case 'suspended':
         return 'bg-yellow-100 text-yellow-800';
+      case 'error':
+        return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -289,6 +350,8 @@ const UserManager: React.FC = () => {
         return '폐기됨';
       case 'suspended':
         return '정지됨';
+      case 'error':
+        return '오류';
       default:
         return '알 수 없음';
     }
@@ -454,10 +517,20 @@ const UserManager: React.FC = () => {
                                 {getStatusText(did.status)}
                               </span>
                             </div>
+                            {did.transaction_hash && (
+                              <div className="text-xs text-gray-500 mt-1 break-all">
+                                트랜잭션: {did.transaction_hash.substring(0, 15)}...
+                              </div>
+                            )}
+                            {did.error_message && (
+                              <div className="text-xs text-red-500 mt-1">
+                                오류: {did.error_message}
+                              </div>
+                            )}
                           </div>
                           {did.status === 'active' && (
                             <button
-                              onClick={() => handleRevokeDid(did.id)}
+                              onClick={() => handleRevokeDid(did.did)}
                               className="text-red-500 hover:text-red-700 text-xs"
                             >
                               폐기

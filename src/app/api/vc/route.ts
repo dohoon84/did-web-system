@@ -1,7 +1,10 @@
-import { createVC } from '@/lib/did/vcUtils';
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllVCs } from '@/lib/db/vcRepository';
-import db from '@/lib/db';
+import { VCService, VCCreateParams } from '@/lib/vc/vcService';
+import { VerifiableCredential } from '@/lib/db/vcRepository';
+import { log } from '@/lib/logger';
+
+// VC 서비스 인스턴스 생성
+const vcService = new VCService();
 
 /**
  * @swagger
@@ -84,69 +87,164 @@ import db from '@/lib/db';
  *               $ref: '#/components/schemas/Error'
  */
 
-// VC 목록 조회
-export async function GET(request: NextRequest) {
+/**
+ * GET /api/vc
+ * VC 목록 조회
+ */
+export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const limitParam = searchParams.get('limit');
-    const offsetParam = searchParams.get('offset');
-    const limit = limitParam ? parseInt(limitParam) : undefined;
-    const offset = offsetParam ? parseInt(offsetParam) : 0;
+    const searchParams = req.nextUrl.searchParams;
+    const issuerDid = searchParams.get('issuer');
+    const subjectDid = searchParams.get('subject');
+    const vcId = searchParams.get('id');
+    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined;
+    const offset = searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : 0;
+    const includeTransactions = searchParams.get('transactions') === 'true';
     
-    // 테이블 존재 여부 확인
-    const tableExistsStmt = db.prepare(`
-      SELECT name FROM sqlite_master 
-      WHERE type='table' AND name='verifiable_credentials'
-    `);
-    const tableExists = tableExistsStmt.get();
+    let vcs: VerifiableCredential[] = [];
     
-    if (!tableExists) {
-      console.log('verifiable_credentials 테이블이 존재하지 않습니다.');
-      return NextResponse.json([]);
-    }
-    
-    if (limit) {
-      // 제한된 수의 VC 목록 가져오기
-      const stmt = db.prepare(`
-        SELECT * FROM verifiable_credentials
-        ORDER BY issuance_date DESC
-        LIMIT ? OFFSET ?
-      `);
-      const vcs = stmt.all(limit, offset);
-      return NextResponse.json(vcs);
+    if (vcId) {
+      // 특정 VC 조회
+      const vc = vcService.getVCById(vcId);
+      if (vc) {
+        vcs = [vc];
+      }
+    } else if (issuerDid) {
+      // 발급자별 VC 조회
+      vcs = vcService.getVCsByIssuer(issuerDid);
+    } else if (subjectDid) {
+      // 대상자별 VC 조회
+      vcs = vcService.getVCsBySubject(subjectDid);
     } else {
-      // 모든 VC 목록 가져오기
-      const vcs = getAllVCs();
-      return NextResponse.json(vcs);
+      // 모든 VC 조회
+      vcs = vcService.getAllVCs(limit, offset);
     }
-  } catch (error: any) {
-    console.error('VC 목록 조회 오류:', error);
-    return NextResponse.json(
-      { error: error.message || 'VC 목록 조회 중 오류가 발생했습니다.' }, 
-      { status: 500 }
-    );
+    
+    // 트랜잭션 정보 포함
+    if (includeTransactions && vcs.length > 0) {
+      const vcsWithTx = vcs.map(vc => {
+        const transactions = vcService.getVCBlockchainTransactions(vc.id);
+        return {
+          ...vc,
+          transactions
+        };
+      });
+      
+      return NextResponse.json({ 
+        success: true,
+        vcs: vcsWithTx
+      });
+    }
+    
+    return NextResponse.json({ 
+      success: true,
+      vcs
+    });
+  } catch (error) {
+    log.error('VC 조회 오류:', error);
+    return NextResponse.json({ 
+      success: false,
+      message: error instanceof Error ? error.message : '내부 서버 오류',
+      vcs: []
+    }, { status: 500 });
   }
 }
 
-// 새 VC 발급
-export async function POST(request: NextRequest) {
+/**
+ * POST /api/vc
+ * VC 생성
+ */
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
-    const { issuerDid, issuerPrivateKey, subjectDid, claims, expirationDate } = body;
+    const { issuerDid, subjectDid, credentialType, claims, expirationDate } = await req.json();
     
-    if (!issuerDid || !issuerPrivateKey || !subjectDid || !claims) {
-      return NextResponse.json({ message: '필수 필드가 누락되었습니다.' }, { status: 400 });
+    // 필수 필드 검증
+    if (!issuerDid || !subjectDid || !credentialType || !claims) {
+      return NextResponse.json({
+        success: false,
+        message: '필수 필드가 누락되었습니다: issuerDid, subjectDid, credentialType, claims'
+      }, { status: 400 });
     }
     
-    let expDate = undefined;
-    if (expirationDate) {
-      expDate = new Date(expirationDate);
+    // VC 생성 파라미터
+    const vcParams: VCCreateParams = {
+      issuerDid,
+      subjectDid,
+      credentialType,
+      claims,
+      expirationDate
+    };
+    
+    // VC 생성
+    const vc = await vcService.createVC(vcParams);
+    
+    return NextResponse.json({
+      success: true,
+      vc
+    });
+  } catch (error) {
+    log.error('VC 생성 오류:', error);
+    
+    // 블록체인 관련 오류인 경우
+    if (error instanceof Error && 'vc' in error) {
+      return NextResponse.json({
+        success: false,
+        message: error.message,
+        vc: (error as any).vc
+      }, { status: 500 });
     }
     
-    const result = await createVC(issuerDid, issuerPrivateKey, subjectDid, claims, expDate);
+    return NextResponse.json({ 
+      success: false,
+      message: error instanceof Error ? error.message : '내부 서버 오류'
+    }, { status: 500 });
+  }
+}
+
+/**
+ * PUT /api/vc/:id/revoke
+ * VC 폐기
+ */
+export async function PUT(req: NextRequest) {
+  try {
+    const { id } = await req.json();
     
-    return NextResponse.json(result, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message || '알 수 없는 오류' }, { status: 500 });
+    if (!id) {
+      return NextResponse.json({
+        success: false,
+        message: 'VC ID가 필요합니다.'
+      }, { status: 400 });
+    }
+    
+    // VC 폐기
+    const vc = await vcService.revokeVC(id);
+    
+    if (!vc) {
+      return NextResponse.json({
+        success: false,
+        message: `ID가 ${id}인 VC를 찾을 수 없습니다.`
+      }, { status: 404 });
+    }
+    
+    return NextResponse.json({
+      success: true,
+      vc
+    });
+  } catch (error) {
+    log.error('VC 폐기 오류:', error);
+    
+    // 블록체인 관련 오류인 경우
+    if (error instanceof Error && 'vc' in error) {
+      return NextResponse.json({
+        success: false,
+        message: error.message,
+        vc: (error as any).vc
+      }, { status: 500 });
+    }
+    
+    return NextResponse.json({ 
+      success: false,
+      message: error instanceof Error ? error.message : '내부 서버 오류'
+    }, { status: 500 });
   }
 } 

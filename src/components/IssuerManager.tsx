@@ -16,9 +16,17 @@ interface DID {
   id: string;
   did: string;
   user_id?: string;
-  status: 'active' | 'revoked' | 'suspended';
+  status: 'active' | 'revoked' | 'suspended' | 'error';
   created_at: string;
   updated_at: string;
+  transaction_hash?: string;
+  error_message?: string;
+}
+
+interface APIResponse {
+  success: boolean;
+  dids: DID[];
+  message?: string;
 }
 
 const IssuerManager: React.FC = () => {
@@ -63,15 +71,21 @@ const IssuerManager: React.FC = () => {
     try {
       const response = await fetch('/api/did');
       if (!response.ok) throw new Error('DID 목록을 불러오는데 실패했습니다.');
-      const data = await response.json();
+      const data = await response.json() as APIResponse;
+      
+      if (!data.success) {
+        throw new Error(data.message || 'DID 목록을 불러오는데 실패했습니다.');
+      }
+      
+      const didList = data.dids || [];
       
       // 사용자와 연결되지 않은 DID만 필터링 (발급자용 DID)
-      const issuerDids = data.filter((did: DID) => !did.user_id);
+      const issuerDids = didList.filter((did) => !did.user_id);
       setDids(issuerDids);
       
       // DID 맵 생성 (did 문자열 -> DID 객체)
       const didMapping: Record<string, DID> = {};
-      data.forEach((did: DID) => {
+      didList.forEach((did) => {
         didMapping[did.did] = did;
       });
       setDidMap(didMapping);
@@ -140,12 +154,15 @@ const IssuerManager: React.FC = () => {
         });
       }
       
+      const responseData = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '발급자 저장에 실패했습니다.');
+        throw new Error(responseData.message || responseData.error || '발급자 저장에 실패했습니다.');
       }
       
-      const result = await response.json();
+      if (responseData.success === false) {
+        throw new Error(responseData.message || '발급자 저장에 실패했습니다.');
+      }
       
       setSuccess(isEditing ? '발급자 정보가 업데이트되었습니다.' : '새 발급자가 등록되었습니다.');
       resetForm();
@@ -181,9 +198,14 @@ const IssuerManager: React.FC = () => {
         method: 'DELETE',
       });
       
+      const responseData = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '발급자 삭제에 실패했습니다.');
+        throw new Error(responseData.message || responseData.error || '발급자 삭제에 실패했습니다.');
+      }
+      
+      if (responseData.success === false) {
+        throw new Error(responseData.message || '발급자 삭제에 실패했습니다.');
       }
       
       setSuccess('발급자가 삭제되었습니다.');
@@ -216,9 +238,14 @@ const IssuerManager: React.FC = () => {
         method: 'PUT',
       });
       
+      const responseData = await response.json();
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'DID 폐기에 실패했습니다.');
+        throw new Error(responseData.message || responseData.error || 'DID 폐기에 실패했습니다.');
+      }
+      
+      if (responseData.success === false) {
+        throw new Error(responseData.message || 'DID 폐기에 실패했습니다.');
       }
       
       setSuccess('DID가 성공적으로 폐기되었습니다.');
@@ -246,6 +273,8 @@ const IssuerManager: React.FC = () => {
         return 'bg-red-100 text-red-800';
       case 'suspended':
         return 'bg-yellow-100 text-yellow-800';
+      case 'error':
+        return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -260,6 +289,8 @@ const IssuerManager: React.FC = () => {
         return '폐기됨';
       case 'suspended':
         return '정지됨';
+      case 'error':
+        return '오류';
       default:
         return '알 수 없음';
     }

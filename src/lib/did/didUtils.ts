@@ -1,224 +1,99 @@
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
+import { ethers } from 'ethers';
 
-// 브라우저 환경인지 확인하는 함수
-const isBrowser = () => typeof window !== 'undefined';
-
-// 브라우저 환경에서 사용할 수 있는 안전한 난수 생성 함수
-function getSecureRandomBytes(length: number): Uint8Array {
-  const array = new Uint8Array(length);
-  if (isBrowser() && window.crypto) {
-    // 브라우저 환경에서는 Web Crypto API 사용
-    window.crypto.getRandomValues(array);
-  } else {
-    // 폴백: 안전하지 않은 난수 생성 (개발용)
-    for (let i = 0; i < length; i++) {
-      array[i] = Math.floor(Math.random() * 256);
-    }
-  }
-  return array;
+export interface DIDDocument {
+  '@context': string[];
+  id: string;
+  controller: string;
+  verificationMethod: {
+    id: string;
+    type: string;
+    controller: string;
+    publicKeyHex: string;
+  }[];
+  authentication: string[];
+  assertionMethod: string[];
+  service: {
+    id: string;
+    type: string;
+    serviceEndpoint: string;
+  }[];
 }
 
-// 개발 목적의 고정 DID 및 키 (실제 환경에서는 사용하지 말 것)
-const DEV_DID = {
-  did: "did:key:z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp",
-  didDocument: {
-    "@context": [
-      "https://www.w3.org/ns/did/v1",
-      "https://w3id.org/security/suites/ed25519-2020/v1"
-    ],
-    "id": "did:key:z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp",
-    "controller": "did:key:z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp",
-    "verificationMethod": [
-      {
-        "id": "did:key:z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp#z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp",
-        "type": "Ed25519VerificationKey2020",
-        "controller": "did:key:z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp",
-        "publicKeyMultibase": "z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp"
-      }
-    ],
-    "authentication": [
-      "did:key:z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp#z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp"
-    ],
-    "assertionMethod": [
-      "did:key:z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp#z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp"
-    ],
-    "capabilityDelegation": [
-      "did:key:z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp#z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp"
-    ],
-    "capabilityInvocation": [
-      "did:key:z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp#z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp"
-    ],
-    "keyAgreement": [
-      "did:key:z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp#z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp"
-    ],
-    "service": [
-      {
-        "id": "did:key:z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp#vcs",
-        "type": "VerifiableCredentialService",
-        "serviceEndpoint": "https://example.com/vc/"
-      }
-    ]
-  },
-  keys: {
-    id: "did:key:z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp#z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp",
-    type: "Ed25519VerificationKey2020",
-    controller: "did:key:z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp",
-    publicKeyMultibase: "z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp",
-    privateKeyMultibase: "zrv3rbPamVDGvrfKKh9vXGPnEMBAVM86oLAYFPxX7gLvVLxw4UcKLKxXqsNjAsjRFxKTVYBuQZS9UoEwfyAGKew4z",
-    publicKeyJwk: {
-      kty: "OKP",
-      crv: "Ed25519",
-      x: "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"
-    },
-    privateKeyJwk: {
-      kty: "OKP",
-      crv: "Ed25519",
-      x: "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
-      d: "nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A"
-    }
-  }
+/**
+ * 새로운 키 페어를 생성합니다.
+ * ethers.Wallet.createRandom()은 RPC 노드에 의존하지 않고 
+ * 로컬에서 암호학적으로 안전한 난수를 사용하여 키를 생성합니다.
+ * 이 함수는 네트워크 연결 없이도 작동합니다.
+ */
+export const generateKeyPair = async () => {
+  // ethers.js를 사용하여 키 생성 (RPC 노드에 의존하지 않음)
+  const wallet = ethers.Wallet.createRandom();
+  return {
+    privateKey: wallet.privateKey,
+    publicKey: wallet.address,
+  };
 };
 
-// DID 생성 함수 - 로컬 개발 환경에서는 고정 DID 사용
-export async function createDID() {
-  try {
-    console.warn('로컬 개발 환경에서는 고정 DID를 사용합니다.');
-    return { ...DEV_DID };
-  } catch (error) {
-    console.error('DID 생성 오류:', error);
-    throw error;
-  }
-}
-
-// DID 문서 조회 함수 - 로컬 개발 환경에서는 고정 DID 문서 반환
-export async function resolveDid(did: string) {
-  try {
-    console.warn('로컬 개발 환경에서는 고정 DID 문서를 반환합니다.');
-    return DEV_DID.didDocument;
-  } catch (error) {
-    console.error('DID 해석 오류:', error);
-    return null;
-  }
-}
-
-// 간단한 DID 생성 함수 (개발 목적)
-export function generateSimpleDid(prefix: string = 'did:example') {
-  const id = uuidv4();
-  const did = `${prefix}:${id}`;
+export const createDIDDocument = async (publicKey: string): Promise<DIDDocument> => {
+  const did = `did:web:${uuidv4()}`;
   
-  const didDocument = {
-    "@context": ["https://www.w3.org/ns/did/v1"],
-    "id": did,
-    "controller": did,
-    "verificationMethod": [
+  const document: DIDDocument = {
+    '@context': ['https://www.w3.org/ns/did/v1'],
+    id: did,
+    controller: did,
+    verificationMethod: [
       {
-        "id": `${did}#keys-1`,
-        "type": "Ed25519VerificationKey2020",
-        "controller": did,
-        "publicKeyMultibase": `z${id.replace(/-/g, '')}`
+        id: `${did}#keys-1`,
+        type: 'EcdsaSecp256k1VerificationKey2019',
+        controller: did,
+        publicKeyHex: publicKey.substring(2) // Remove '0x' prefix
       }
     ],
-    "authentication": [`${did}#keys-1`],
-    "assertionMethod": [`${did}#keys-1`],
-    "service": [
+    authentication: [`${did}#keys-1`],
+    assertionMethod: [`${did}#keys-1`],
+    service: [
       {
-        "id": `${did}#vcs`,
-        "type": "VerifiableCredentialService",
-        "serviceEndpoint": "https://example.com/vc/"
+        id: `${did}#service-1`,
+        type: 'DIDWebService',
+        serviceEndpoint: 'https://example.com/endpoint'
       }
     ]
   };
-  
-  const keys = {
-    id: `${did}#keys-1`,
-    type: "Ed25519VerificationKey2020",
-    controller: did,
-    publicKeyMultibase: `z${id.replace(/-/g, '')}`,
-    privateKeyMultibase: `z${uuidv4().replace(/-/g, '')}${uuidv4().replace(/-/g, '')}`,
-    publicKeyJwk: {
-      kty: "OKP",
-      crv: "Ed25519",
-      x: Buffer.from(getSecureRandomBytes(32)).toString('base64').replace(/=/g, '')
-    },
-    privateKeyJwk: {
-      kty: "OKP",
-      crv: "Ed25519",
-      x: Buffer.from(getSecureRandomBytes(32)).toString('base64').replace(/=/g, ''),
-      d: Buffer.from(getSecureRandomBytes(32)).toString('base64').replace(/=/g, '')
-    }
-  };
-  
-  return { did, didDocument, keys };
-}
 
-// DID Document 검증 함수
-export async function verifyDidDocument(didDocument: any) {
+  return document;
+};
+
+export const hashDIDDocument = (document: DIDDocument): string => {
+  const documentString = JSON.stringify(document);
+  return '0x' + crypto.createHash('sha256').update(documentString).digest('hex');
+};
+
+export const validateDIDDocument = (document: DIDDocument): boolean => {
   try {
-    // 간단한 구조 검증
-    if (!didDocument.id || !didDocument.verificationMethod || !didDocument.authentication) {
+    // 기본 필드 검증
+    if (!document['@context'] || !document.id || !document.controller) {
       return false;
     }
-    
-    // 더 복잡한 검증 로직은 실제 구현에서 추가할 수 있음
+
+    // verificationMethod 검증
+    if (!document.verificationMethod || document.verificationMethod.length === 0) {
+      return false;
+    }
+
+    // authentication 검증
+    if (!document.authentication || document.authentication.length === 0) {
+      return false;
+    }
+
+    // assertionMethod 검증
+    if (!document.assertionMethod || document.assertionMethod.length === 0) {
+      return false;
+    }
+
     return true;
   } catch (error) {
-    console.error('DID Document 검증 오류:', error);
     return false;
   }
-}
-
-// DID Document에서 공개키 추출
-export function getPublicKeyFromDidDocument(didDocument: any) {
-  if (!didDocument || !didDocument.verificationMethod || !didDocument.verificationMethod[0]) {
-    throw new Error('유효하지 않은 DID Document');
-  }
-  
-  return didDocument.verificationMethod[0].publicKeyJwk || didDocument.verificationMethod[0].publicKeyBase58;
-}
-
-// // 로컬 스토리지에 DID 정보 저장
-// export function storeDid(did: string, didDocument: any, privateKey: any) {
-//   if (!isBrowser()) return false;
-  
-//   try {
-//     const didInfo = {
-//       did,
-//       didDocument,
-//       privateKey,
-//     };
-    
-//     localStorage.setItem('didInfo', JSON.stringify(didInfo));
-//     return true;
-//   } catch (error) {
-//     console.error('DID 저장 오류:', error);
-//     return false;
-//   }
-// }
-
-// // 로컬 스토리지에서 DID 정보 불러오기
-// export function loadDid() {
-//   if (!isBrowser()) return null;
-  
-//   try {
-//     const didInfoStr = localStorage.getItem('didInfo');
-//     if (didInfoStr) {
-//       return JSON.parse(didInfoStr);
-//     }
-//   } catch (error) {
-//     console.error('DID 로드 오류:', error);
-//   }
-//   return null;
-// }
-
-// // DID 정보 삭제
-// export function deleteDid() {
-//   if (!isBrowser()) return false;
-  
-//   try {
-//     localStorage.removeItem('didInfo');
-//     return true;
-//   } catch (error) {
-//     console.error('DID 삭제 오류:', error);
-//     return false;
-//   }
-// } 
+}; 

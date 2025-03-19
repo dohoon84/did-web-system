@@ -8,7 +8,7 @@ server:
 database:
   type: sqlite
   path: ./data/did-system-local.db
-  initialize: false
+  initialize: true
 
 logging:
   level: debug  # 로컬 환경에서는 더 자세한 로그 출력 

@@ -1,101 +1,132 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getVPById, deleteVP } from '@/lib/db/vpRepository';
+import { log } from '@/lib/logger';
 
 /**
  * @swagger
  * /api/vp/{id}:
  *   get:
- *     summary: VP 조회
- *     tags: [VP]
- *     description: 특정 VP를 조회합니다.
+ *     summary: VP 정보를 조회합니다.
+ *     description: 지정된 ID의 VP 정보를 조회합니다.
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
+ *         description: VP ID
  *         schema:
  *           type: string
- *         description: 조회할 VP 식별자
  *     responses:
  *       200:
- *         description: 성공적으로 VP를 조회함
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/VP'
+ *         description: VP 정보
  *       404:
  *         description: VP를 찾을 수 없음
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  *       500:
  *         description: 서버 오류
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *   delete:
- *     summary: VP 삭제
- *     tags: [VP]
- *     description: 특정 VP를 삭제합니다.
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 삭제할 VP 식별자
- *     responses:
- *       200:
- *         description: 성공적으로 VP를 삭제함
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *       404:
- *         description: VP를 찾을 수 없음
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       500:
- *         description: 서버 오류
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
  */
-
-// VP 조회
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = params.id;
+    const vpId = params.id;
     
-    // 서버 측에서는 데이터베이스에서 VP를 조회해야 하지만,
-    // 현재는 클라이언트 측 로컬 스토리지에 저장하므로 404 반환
-    return NextResponse.json({ message: 'VP를 찾을 수 없습니다.' }, { status: 404 });
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message || '알 수 없는 오류' }, { status: 500 });
+    // VP 조회
+    const vpRecord = getVPById(vpId);
+    if (!vpRecord) {
+      return NextResponse.json(
+        { success: false, error: 'VP를 찾을 수 없습니다.' },
+        { status: 404 }
+      );
+    }
+    
+    // VP 데이터 파싱
+    let vpData;
+    try {
+      vpData = JSON.parse(vpRecord.vp_data);
+    } catch (parseError) {
+      log.error(`VP ID ${vpId} 데이터 파싱 오류:`, parseError);
+      return NextResponse.json(
+        { success: false, error: 'VP 데이터 파싱 오류' },
+        { status: 500 }
+      );
+    }
+    
+    return NextResponse.json({
+      success: true,
+      id: vpRecord.id,
+      vp_id: vpRecord.vp_id,
+      holder_did: vpRecord.holder_did,
+      status: vpRecord.status,
+      created_at: vpRecord.created_at,
+      updated_at: vpRecord.updated_at,
+      vp: vpData
+    });
+    
+  } catch (error) {
+    log.error('VP 조회 오류:', error);
+    return NextResponse.json(
+      { success: false, error: 'VP 조회 중 오류가 발생했습니다.' },
+      { status: 500 }
+    );
   }
 }
 
-// VP 삭제
+/**
+ * @swagger
+ * /api/vp/{id}:
+ *   delete:
+ *     summary: VP를 삭제합니다.
+ *     description: 지정된 ID의 VP를 삭제합니다.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: VP ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: VP 삭제 성공
+ *       404:
+ *         description: VP를 찾을 수 없음
+ *       500:
+ *         description: 서버 오류
+ */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = params.id;
+    const vpId = params.id;
     
-    // 서버 측에서는 데이터베이스에서 VP를 삭제해야 하지만,
-    // 현재는 클라이언트 측 로컬 스토리지에 저장하므로 성공 응답만 반환
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ message: error.message || '알 수 없는 오류' }, { status: 500 });
+    // VP 존재 확인
+    const vpRecord = getVPById(vpId);
+    if (!vpRecord) {
+      return NextResponse.json(
+        { success: false, error: 'VP를 찾을 수 없습니다.' },
+        { status: 404 }
+      );
+    }
+    
+    // VP 삭제
+    const deleted = deleteVP(vpId);
+    if (!deleted) {
+      return NextResponse.json(
+        { success: false, error: 'VP 삭제에 실패했습니다.' },
+        { status: 500 }
+      );
+    }
+    
+    return NextResponse.json({
+      success: true,
+      message: 'VP가 성공적으로 삭제되었습니다.'
+    });
+    
+  } catch (error) {
+    log.error('VP 삭제 오류:', error);
+    return NextResponse.json(
+      { success: false, error: 'VP 삭제 중 오류가 발생했습니다.' },
+      { status: 500 }
+    );
   }
 } 

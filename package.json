@@ -18,9 +18,17 @@
     "build:production": "cross-env NODE_ENV=production APP_ENV=production next build"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^7.3.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^6.4.8",
+    "@mui/material": "^6.4.8",
+    "@mui/x-data-grid": "^7.28.0",
     "@transmute/did-key.js": "^0.3.0-unstable.10",
     "@transmute/vc.js": "^0.7.0-unstable.82",
+    "@types/web3": "^1.0.20",
     "better-sqlite3": "^11.8.1",
+    "ethers": "^6.13.5",
     "jose": "^6.0.10",
     "next": "15.2.2",
     "next-swagger-doc": "^0.4.1",
@@ -28,9 +36,12 @@
     "react-dom": "^19.0.0",
     "recharts": "^2.15.1",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-react": "^5.20.1",
+    "swagger-ui-dist": "^4.18.3",
+    "swagger-ui-react": "^4.19.1",
     "uuid": "^11.1.0",
-    "winston": "^3.17.0"
+    "web3": "^4.16.0",
+    "winston": "^3.17.0",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

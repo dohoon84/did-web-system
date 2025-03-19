@@ -60,6 +60,9 @@
 ### 환경별 실행 방법
 
 ```bash
+# 패키지 설치
+npm install --legacy-peer-deps
+
 # 로컬 환경에서 서버 실행
 npm run dev:local
 
