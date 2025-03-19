@@ -182,6 +182,166 @@ registry.registerPath({
   }
 });
 
+// 새로 추가: DID 상세 조회 API
+registry.registerPath({
+  method: 'get',
+  path: '/api/did/{id}',
+  tags: ['DID'],
+  summary: '특정 DID 조회',
+  description: 'ID로 특정 DID 정보를 조회합니다.',
+  parameters: [
+    {
+      in: 'path',
+      name: 'id',
+      schema: { type: 'string' },
+      required: true,
+      description: '조회할 DID의 ID'
+    }
+  ],
+  responses: {
+    200: {
+      description: 'DID 정보가 성공적으로 조회됨'
+    },
+    404: {
+      description: 'DID를 찾을 수 없음'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: DID 삭제 API
+registry.registerPath({
+  method: 'delete',
+  path: '/api/did/{id}',
+  tags: ['DID'],
+  summary: 'DID 삭제',
+  description: '특정 ID의 DID를 삭제합니다.',
+  parameters: [
+    {
+      in: 'path',
+      name: 'id',
+      schema: { type: 'string' },
+      required: true,
+      description: '삭제할 DID의 ID'
+    }
+  ],
+  responses: {
+    200: {
+      description: 'DID가 성공적으로 삭제됨'
+    },
+    404: {
+      description: 'DID를 찾을 수 없음'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: DID 폐기 API
+registry.registerPath({
+  method: 'post',
+  path: '/api/did/{id}/revoke',
+  tags: ['DID'],
+  summary: 'DID 폐기',
+  description: '특정 DID를 폐기하고, 관련된 모든 VC도 함께 폐기합니다.',
+  parameters: [
+    {
+      in: 'path',
+      name: 'id',
+      schema: { type: 'string' },
+      required: true,
+      description: '폐기할 DID의 ID'
+    }
+  ],
+  responses: {
+    200: {
+      description: 'DID가 성공적으로 폐기됨',
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              status: { type: 'string' }
+            }
+          }
+        }
+      }
+    },
+    404: {
+      description: 'DID를 찾을 수 없음'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: DID 이력 조회 API
+registry.registerPath({
+  method: 'get',
+  path: '/api/did/history',
+  tags: ['DID'],
+  summary: 'DID 이력 조회',
+  description: 'DID 이력을 조회하고 다양한 필터를 적용할 수 있습니다.',
+  parameters: [
+    {
+      in: 'query',
+      name: 'date',
+      schema: { type: 'string' },
+      required: false,
+      description: '날짜별 필터링 (YYYY-MM-DD 형식)'
+    },
+    {
+      in: 'query',
+      name: 'userId',
+      schema: { type: 'string' },
+      required: false,
+      description: '사용자 ID로 필터링'
+    },
+    {
+      in: 'query',
+      name: 'issuerId',
+      schema: { type: 'string' },
+      required: false,
+      description: '발급자 ID로 필터링'
+    },
+    {
+      in: 'query',
+      name: 'status',
+      schema: { type: 'string', enum: ['active', 'revoked', 'suspended'] },
+      required: false,
+      description: 'DID 상태로 필터링'
+    },
+    {
+      in: 'query',
+      name: 'limit',
+      schema: { type: 'integer' },
+      required: false,
+      description: '반환할 최대 항목 수'
+    },
+    {
+      in: 'query',
+      name: 'offset',
+      schema: { type: 'integer' },
+      required: false,
+      description: '시작 항목 번호'
+    }
+  ],
+  responses: {
+    200: {
+      description: 'DID 이력이 성공적으로 조회됨'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
 // 사용자 관련 API 경로 등록
 registry.registerPath({
   method: 'get',
@@ -199,44 +359,100 @@ registry.registerPath({
   }
 });
 
+// 새로 추가: 특정 사용자 조회 API
 registry.registerPath({
-  method: 'post',
-  path: '/api/user',
+  method: 'get',
+  path: '/api/user/{id}',
   tags: ['User'],
-  summary: '사용자를 생성합니다.',
-  description: '새로운 사용자를 생성합니다.',
-  requestBody: {
-    required: true,
-    content: {
-      'application/json': {
-        schema: {
-          type: 'object',
-          required: ['name', 'birth_date'],
-          properties: {
-            name: {
-              type: 'string',
-              description: '사용자 이름'
-            },
-            email: {
-              type: 'string',
-              format: 'email',
-              description: '이메일 주소 (선택 사항)'
-            },
-            birth_date: {
-              type: 'string',
-              description: '생년월일 (YYYY-MM-DD 형식)'
+  summary: '사용자 조회',
+  description: '특정 ID의 사용자를 조회합니다.',
+  parameters: [
+    {
+      in: 'path',
+      name: 'id',
+      schema: { type: 'string' },
+      required: true,
+      description: '사용자 ID'
+    }
+  ],
+  responses: {
+    200: {
+      description: '사용자 정보가 성공적으로 조회됨'
+    },
+    404: {
+      description: '사용자를 찾을 수 없음'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: 사용자 삭제 API
+registry.registerPath({
+  method: 'delete',
+  path: '/api/user/{id}',
+  tags: ['User'],
+  summary: '사용자 삭제',
+  description: '특정 ID의 사용자를 삭제합니다.',
+  parameters: [
+    {
+      in: 'path',
+      name: 'id',
+      schema: { type: 'string' },
+      required: true,
+      description: '삭제할 사용자의 ID'
+    }
+  ],
+  responses: {
+    200: {
+      description: '사용자가 성공적으로 삭제됨',
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' }
             }
           }
         }
       }
+    },
+    404: {
+      description: '사용자를 찾을 수 없음'
+    },
+    500: {
+      description: '서버 오류'
     }
-  },
+  }
+});
+
+// 새로 추가: 사용자 DID 조회 API
+registry.registerPath({
+  method: 'get',
+  path: '/api/user/{id}/dids',
+  tags: ['User', 'DID'],
+  summary: '사용자 DID 목록 조회',
+  description: '특정 사용자에게 할당된 DID 목록을 조회합니다.',
+  parameters: [
+    {
+      in: 'path',
+      name: 'id',
+      schema: { type: 'string' },
+      required: true,
+      description: '사용자 ID'
+    }
+  ],
   responses: {
     200: {
-      description: '사용자가 성공적으로 생성됨'
+      description: '사용자의 DID 목록이 성공적으로 조회됨'
     },
-    400: {
-      description: '잘못된 요청'
+    404: {
+      description: '사용자를 찾을 수 없음'
+    },
+    500: {
+      description: '서버 오류'
     }
   }
 });
@@ -288,20 +504,20 @@ registry.registerPath({
   }
 });
 
-// 데모용 API 등록
+// 새로 추가: VC 생성 API
 registry.registerPath({
   method: 'post',
-  path: '/api/vc/issue/age',
-  tags: ['Demo', 'VC'],
-  summary: '연령 인증 VC를 발급합니다.',
-  description: '사용자의 연령 정보를 검증하고 연령 인증 VC를 발급합니다.',
+  path: '/api/vc',
+  tags: ['VC'],
+  summary: 'VC 생성',
+  description: '새로운 Verifiable Credential을 생성합니다.',
   requestBody: {
     required: true,
     content: {
       'application/json': {
         schema: {
           type: 'object',
-          required: ['issuerDid', 'subjectDid', 'userId', 'minAge'],
+          required: ['issuerDid', 'subjectDid', 'credentialType', 'credentialData'],
           properties: {
             issuerDid: {
               type: 'string',
@@ -309,15 +525,19 @@ registry.registerPath({
             },
             subjectDid: {
               type: 'string',
-              description: '주체(사용자) DID'
+              description: '대상자 DID'
             },
-            userId: {
+            credentialType: {
               type: 'string',
-              description: '사용자 ID'
+              description: 'VC 타입'
             },
-            minAge: {
-              type: 'number',
-              description: '최소 연령 요구사항'
+            credentialData: {
+              type: 'object',
+              description: 'VC 데이터 (JSON 객체)'
+            },
+            expirationDate: {
+              type: 'string',
+              description: '만료일자 (ISO 형식, 선택사항)'
             }
           }
         }
@@ -326,7 +546,50 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: 'VC가 성공적으로 발급됨'
+      description: 'VC가 성공적으로 생성됨'
+    },
+    400: {
+      description: '잘못된 요청'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: VC 폐기 API
+registry.registerPath({
+  method: 'put',
+  path: '/api/vc',
+  tags: ['VC'],
+  summary: 'VC 폐기',
+  description: 'Verifiable Credential을 폐기합니다.',
+  requestBody: {
+    required: true,
+    content: {
+      'application/json': {
+        schema: {
+          type: 'object',
+          required: ['id'],
+          properties: {
+            id: {
+              type: 'string',
+              description: '폐기할 VC의 ID'
+            }
+          }
+        }
+      }
+    }
+  },
+  responses: {
+    200: {
+      description: 'VC가 성공적으로 폐기됨'
+    },
+    404: {
+      description: 'VC를 찾을 수 없음'
+    },
+    500: {
+      description: '서버 오류'
     }
   }
 });
@@ -418,6 +681,354 @@ registry.registerPath({
   }
 });
 
+// 새로 추가: VP 목록 조회 API
+registry.registerPath({
+  method: 'get',
+  path: '/api/vp',
+  tags: ['VP'],
+  summary: 'VP 목록 조회',
+  description: 'Verifiable Presentation 목록을 조회합니다.',
+  parameters: [
+    {
+      in: 'query',
+      name: 'holderDid',
+      schema: { type: 'string' },
+      required: false,
+      description: '소유자 DID로 필터링'
+    },
+    {
+      in: 'query',
+      name: 'limit',
+      schema: { type: 'integer' },
+      required: false,
+      description: '반환할 최대 VP 수'
+    },
+    {
+      in: 'query',
+      name: 'offset',
+      schema: { type: 'integer' },
+      required: false,
+      description: '시작 항목 번호'
+    }
+  ],
+  responses: {
+    200: {
+      description: 'VP 목록이 성공적으로 조회됨'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: 특정 VP 조회 API
+registry.registerPath({
+  method: 'get',
+  path: '/api/vp/{id}',
+  tags: ['VP'],
+  summary: 'VP 정보 조회',
+  description: '지정된 ID의 VP 정보를 조회합니다.',
+  parameters: [
+    {
+      in: 'path',
+      name: 'id',
+      schema: { type: 'string' },
+      required: true,
+      description: 'VP ID'
+    }
+  ],
+  responses: {
+    200: {
+      description: 'VP 정보가 성공적으로 조회됨'
+    },
+    404: {
+      description: 'VP를 찾을 수 없음'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: VP 삭제 API
+registry.registerPath({
+  method: 'delete',
+  path: '/api/vp/{id}',
+  tags: ['VP'],
+  summary: 'VP 삭제',
+  description: '지정된 ID의 VP를 삭제합니다.',
+  parameters: [
+    {
+      in: 'path',
+      name: 'id',
+      schema: { type: 'string' },
+      required: true,
+      description: '삭제할 VP의 ID'
+    }
+  ],
+  responses: {
+    200: {
+      description: 'VP가 성공적으로 삭제됨'
+    },
+    404: {
+      description: 'VP를 찾을 수 없음'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: 발급자 목록 조회 API
+registry.registerPath({
+  method: 'get',
+  path: '/api/issuer',
+  tags: ['Issuer'],
+  summary: '발급자 목록 조회',
+  description: '저장된 발급자 목록을 조회합니다.',
+  parameters: [
+    {
+      in: 'query',
+      name: 'limit',
+      schema: { type: 'integer' },
+      required: false,
+      description: '반환할 최대 발급자 수'
+    },
+    {
+      in: 'query',
+      name: 'offset',
+      schema: { type: 'integer' },
+      required: false,
+      description: '시작 항목 번호'
+    }
+  ],
+  responses: {
+    200: {
+      description: '발급자 목록이 성공적으로 조회됨'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: 발급자 생성 API
+registry.registerPath({
+  method: 'post',
+  path: '/api/issuer',
+  tags: ['Issuer'],
+  summary: '발급자 생성',
+  description: '새로운 발급자를 생성합니다.',
+  requestBody: {
+    required: true,
+    content: {
+      'application/json': {
+        schema: {
+          type: 'object',
+          required: ['name', 'did'],
+          properties: {
+            name: {
+              type: 'string',
+              description: '발급자 이름'
+            },
+            description: {
+              type: 'string',
+              description: '발급자 설명'
+            },
+            did: {
+              type: 'string',
+              description: '발급자 DID'
+            },
+            organization: {
+              type: 'string',
+              description: '소속 기관명'
+            }
+          }
+        }
+      }
+    }
+  },
+  responses: {
+    200: {
+      description: '발급자가 성공적으로 생성됨'
+    },
+    400: {
+      description: '잘못된 요청'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: 특정 발급자 조회 API
+registry.registerPath({
+  method: 'get',
+  path: '/api/issuer/{id}',
+  tags: ['Issuer'],
+  summary: '발급자 조회',
+  description: '특정 ID의 발급자 정보를 조회합니다.',
+  parameters: [
+    {
+      in: 'path',
+      name: 'id',
+      schema: { type: 'string' },
+      required: true,
+      description: '발급자 ID'
+    }
+  ],
+  responses: {
+    200: {
+      description: '발급자 정보가 성공적으로 조회됨'
+    },
+    404: {
+      description: '발급자를 찾을 수 없음'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: 발급자 업데이트 API
+registry.registerPath({
+  method: 'put',
+  path: '/api/issuer/{id}',
+  tags: ['Issuer'],
+  summary: '발급자 정보 업데이트',
+  description: '특정 발급자의 정보를 업데이트합니다.',
+  parameters: [
+    {
+      in: 'path',
+      name: 'id',
+      schema: { type: 'string' },
+      required: true,
+      description: '업데이트할 발급자의 ID'
+    }
+  ],
+  requestBody: {
+    required: true,
+    content: {
+      'application/json': {
+        schema: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: '발급자 이름'
+            },
+            description: {
+              type: 'string',
+              description: '발급자 설명'
+            },
+            organization: {
+              type: 'string',
+              description: '소속 기관명'
+            }
+          }
+        }
+      }
+    }
+  },
+  responses: {
+    200: {
+      description: '발급자 정보가 성공적으로 업데이트됨'
+    },
+    404: {
+      description: '발급자를 찾을 수 없음'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: 발급자 삭제 API
+registry.registerPath({
+  method: 'delete',
+  path: '/api/issuer/{id}',
+  tags: ['Issuer'],
+  summary: '발급자 삭제',
+  description: '특정 ID의 발급자를 삭제합니다.',
+  parameters: [
+    {
+      in: 'path',
+      name: 'id',
+      schema: { type: 'string' },
+      required: true,
+      description: '삭제할 발급자의 ID'
+    }
+  ],
+  responses: {
+    200: {
+      description: '발급자가 성공적으로 삭제됨'
+    },
+    404: {
+      description: '발급자를 찾을 수 없음'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: 발급자 통계 API
+registry.registerPath({
+  method: 'get',
+  path: '/api/issuer/stats',
+  tags: ['Issuer', 'Stats'],
+  summary: '발급자 통계 조회',
+  description: '발급자 관련 통계 정보를 조회합니다.',
+  parameters: [
+    {
+      in: 'query',
+      name: 'organization',
+      schema: { type: 'string' },
+      required: false,
+      description: '특정 기관으로 필터링'
+    },
+    {
+      in: 'query',
+      name: 'limit',
+      schema: { type: 'integer' },
+      required: false,
+      description: '반환할 최대 항목 수'
+    },
+    {
+      in: 'query',
+      name: 'offset',
+      schema: { type: 'integer' },
+      required: false,
+      description: '시작 항목 번호'
+    }
+  ],
+  responses: {
+    200: {
+      description: '발급자 통계가 성공적으로 조회됨'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
+// 새로 추가: 시스템 통계 API
+registry.registerPath({
+  method: 'get',
+  path: '/api/stats',
+  tags: ['Stats'],
+  summary: '시스템 통계 조회',
+  description: 'DID, VC, VP 및 사용자 관련 시스템 통계를 조회합니다.',
+  responses: {
+    200: {
+      description: '시스템 통계가 성공적으로 조회됨'
+    },
+    500: {
+      description: '서버 오류'
+    }
+  }
+});
+
 // OpenAPI 생성기 인스턴스 생성
 const generator = new OpenApiGeneratorV3(registry.definitions);
 
@@ -440,7 +1051,25 @@ export const apiDefinition = generator.generateDocument({
 
 // API 문서 가져오기 함수
 export function getApiDocs() {
-  return apiDefinition;
+  // 서버 사이드 렌더링일 경우 window가 없으므로 기본값 사용
+  const origin = typeof window !== 'undefined' && window.location 
+    ? window.location.origin 
+    : 'http://localhost:3000';
+    
+  const serverUrl = origin;
+  
+  // API 정의에 현재 서버 URL 기반 업데이트
+  const updatedDefinition = {
+    ...apiDefinition,
+    servers: [
+      {
+        url: serverUrl,
+        description: '현재 서버',
+      }
+    ]
+  };
+  
+  return updatedDefinition;
 }
 
 export default apiDefinition; 

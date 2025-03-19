@@ -4,10 +4,11 @@ import React, { useState, useEffect } from 'react';
 
 interface VP {
   id: string;
+  vp_id: string;
   holder_did: string;
-  verifier: string;
-  presentation_data: string;
-  verification_result?: string;
+  vp_data: string;
+  vp_hash?: string;
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -26,6 +27,7 @@ interface DID {
   id: string;
   did: string;
   did_document: string;
+  private_key?: string;
   user_id?: string;
   created_at: string;
 }
@@ -42,8 +44,7 @@ const VpManager: React.FC = () => {
   // VP 생성 폼 상태
   const [holderDid, setHolderDid] = useState<string>('');
   const [selectedVcIds, setSelectedVcIds] = useState<string[]>([]);
-  const [verifier, setVerifier] = useState<string>('성인 인증 서비스');
-  const [requiredAge, setRequiredAge] = useState<number>(19);
+  const [privateKey, setPrivateKey] = useState<string>('');
   
   // VP 목록 불러오기
   const fetchVps = async () => {
@@ -57,10 +58,12 @@ const VpManager: React.FC = () => {
       }
       
       const data = await response.json();
-      setVps(data);
+      // API 응답 구조 처리
+      const vpsArray = data.success ? data.items || [] : Array.isArray(data) ? data : [];
+      setVps(vpsArray);
       
-      if (data.length > 0 && !selectedVp) {
-        setSelectedVp(data[0]);
+      if (vpsArray.length > 0 && !selectedVp) {
+        setSelectedVp(vpsArray[0]);
       }
     } catch (err: any) {
       setError(err.message || '알 수 없는 오류가 발생했습니다.');
@@ -132,12 +135,22 @@ const VpManager: React.FC = () => {
     });
   };
 
-  // VP 생성 및 검증 함수
-  const handleVerifyVp = async (e: React.FormEvent) => {
+  // 선택된 DID의 Private Key 가져오기
+  const getDidPrivateKey = (selectedDid: string) => {
+    const didObj = dids.find(d => d.did === selectedDid);
+    if (didObj && didObj.private_key) {
+      setPrivateKey(didObj.private_key);
+    } else {
+      setPrivateKey('');
+    }
+  };
+
+  // VP 생성 함수
+  const handleCreateVp = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!holderDid || selectedVcIds.length === 0) {
-      setError('모든 필드를 입력해주세요.');
+    if (!holderDid || selectedVcIds.length === 0 || !privateKey) {
+      setError('모든 필드를 입력해주세요. DID 개인키가 필요합니다.');
       return;
     }
     
@@ -146,57 +159,78 @@ const VpManager: React.FC = () => {
       setError(null);
       setSuccess(null);
       
-      // 선택된 VC 데이터 가져오기
-      const selectedVcs = vcs.filter(vc => selectedVcIds.includes(vc.id));
-      
-      // VP 생성 및 검증 API 호출
-      const vpData = {
-        '@context': ['https://www.w3.org/2018/credentials/v1'],
-        'type': ['VerifiablePresentation'],
-        'holder': holderDid,
-        'verifiableCredential': selectedVcs.map(vc => JSON.parse(vc.credential_data)),
-        'proof': {
-          'type': 'Ed25519Signature2020',
-          'created': new Date().toISOString(),
-          'verificationMethod': `${holderDid}#keys-1`,
-          'proofPurpose': 'authentication',
-          'challenge': '123456',
-          'domain': 'example.com',
-          'jws': 'eyJhbGciOiJFZERTQSJ9.DUMMY_SIGNATURE_FOR_DEVELOPMENT.DUMMY'
-        }
-      };
-      
-      const response = await fetch('/api/vp/verify', {
+      // VP 생성 API 호출
+      const response = await fetch('/api/vp/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          vp: vpData,
-          verifier: verifier,
-          requiredAge: requiredAge
+          holderDid,
+          vcIds: selectedVcIds,
+          privateKey,
+          types: ['IdentityPresentation']
         }),
       });
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'VP 검증에 실패했습니다.');
+        throw new Error(errorData.error || 'VP 생성에 실패했습니다.');
       }
       
       const data = await response.json();
       
+      // VP 생성 성공
+      setSuccess('VP가 성공적으로 생성되었습니다.');
+      
+      // VP 검증 진행
+      await verifyVp(data.vp, data.vpId);
+      
       // VP 목록 다시 불러오기
       fetchVps();
       
-      setSuccess('VP가 성공적으로 생성되고 검증되었습니다.');
-      
       // 폼 초기화
       setSelectedVcIds([]);
+      setPrivateKey('');
     } catch (err: any) {
       setError(err.message || '알 수 없는 오류가 발생했습니다.');
-      console.error('VP 생성/검증 오류:', err);
+      console.error('VP 생성 오류:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // VP 검증 함수
+  const verifyVp = async (vp: any, vpId?: string) => {
+    try {
+      const verifyResponse = await fetch('/api/vp/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          vpData: vp,
+          vpId
+        }),
+      });
+      
+      if (!verifyResponse.ok) {
+        const errorData = await verifyResponse.json();
+        throw new Error(errorData.error || 'VP 검증에 실패했습니다.');
+      }
+      
+      const verifyData = await verifyResponse.json();
+      
+      if (verifyData.valid) {
+        setSuccess(prev => (prev || '') + ' VP가 성공적으로 검증되었습니다.');
+      } else {
+        setError(`VP 검증 실패: ${verifyData.reason}`);
+      }
+      
+      return verifyData;
+    } catch (err: any) {
+      console.error('VP 검증 오류:', err);
+      return { valid: false, reason: err.message };
     }
   };
 
@@ -210,15 +244,38 @@ const VpManager: React.FC = () => {
     }
   };
 
-  // 검증 결과 파싱 함수
-  const parseVerificationResult = (resultStr?: string) => {
-    if (!resultStr) return null;
+  // VP 삭제 함수
+  const handleDeleteVp = async (vpId: string) => {
+    if (!confirm('정말로 이 VP를 삭제하시겠습니까?')) {
+      return;
+    }
     
     try {
-      return JSON.parse(resultStr);
-    } catch (err) {
-      console.error('검증 결과 파싱 오류:', err);
-      return { error: '검증 결과 파싱 오류' };
+      setLoading(true);
+      
+      const response = await fetch(`/api/vp/${vpId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'VP 삭제에 실패했습니다.');
+      }
+      
+      setSuccess('VP가 성공적으로 삭제되었습니다.');
+      
+      // 삭제된 VP가 현재 선택된 VP인 경우 선택 해제
+      if (selectedVp?.id === vpId) {
+        setSelectedVp(null);
+      }
+      
+      // VP 목록 다시 불러오기
+      fetchVps();
+    } catch (err: any) {
+      setError(err.message || '알 수 없는 오류가 발생했습니다.');
+      console.error('VP 삭제 오류:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -238,17 +295,20 @@ const VpManager: React.FC = () => {
         </div>
       )}
       
-      {/* VP 생성 및 검증 폼 */}
+      {/* VP 생성 폼 */}
       <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-2">VP 생성 및 검증</h3>
-        <form onSubmit={handleVerifyVp} className="bg-gray-50 p-4 rounded">
+        <h3 className="text-lg font-semibold mb-2">VP 생성</h3>
+        <form onSubmit={handleCreateVp} className="bg-gray-50 p-4 rounded">
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2">
               홀더 DID
             </label>
             <select
               value={holderDid}
-              onChange={(e) => setHolderDid(e.target.value)}
+              onChange={(e) => {
+                setHolderDid(e.target.value);
+                getDidPrivateKey(e.target.value);
+              }}
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               required
             >
@@ -291,37 +351,24 @@ const VpManager: React.FC = () => {
           
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2">
-              검증자
+              개인키 (자동 입력 또는 직접 입력)
             </label>
             <input
-              type="text"
-              value={verifier}
-              onChange={(e) => setVerifier(e.target.value)}
+              type="password"
+              value={privateKey}
+              onChange={(e) => setPrivateKey(e.target.value)}
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               required
-            />
-          </div>
-          
-          <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              요구 연령
-            </label>
-            <input
-              type="number"
-              value={requiredAge}
-              onChange={(e) => setRequiredAge(parseInt(e.target.value))}
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              min="1"
-              required
+              placeholder="DID 선택 시 자동 입력되거나 직접 입력하세요"
             />
           </div>
           
           <button
             type="submit"
-            disabled={loading || !holderDid || selectedVcIds.length === 0}
+            disabled={loading || !holderDid || selectedVcIds.length === 0 || !privateKey}
             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
           >
-            {loading ? '처리 중...' : 'VP 생성 및 검증하기'}
+            {loading ? '처리 중...' : 'VP 생성하기'}
           </button>
         </form>
       </div>
@@ -341,8 +388,19 @@ const VpManager: React.FC = () => {
                     onClick={() => handleSelectVp(vp)}
                   >
                     <div className="text-sm font-medium truncate">홀더: {vp.holder_did}</div>
-                    <div className="text-xs">검증자: {vp.verifier}</div>
+                    <div className="text-xs">상태: {vp.status}</div>
                     <div className="text-xs text-gray-500">{new Date(vp.created_at).toLocaleString()}</div>
+                    <div className="flex mt-1 justify-end">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteVp(vp.id);
+                        }}
+                        className="text-xs bg-red-500 hover:bg-red-700 text-white px-2 py-1 rounded"
+                      >
+                        삭제
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -360,50 +418,27 @@ const VpManager: React.FC = () => {
                   <div className="text-sm break-all">{selectedVp.holder_did}</div>
                 </div>
                 <div className="mb-2">
-                  <span className="font-semibold">검증자:</span>
-                  <div className="text-sm">{selectedVp.verifier}</div>
+                  <span className="font-semibold">VP ID:</span>
+                  <div className="text-sm">{selectedVp.vp_id}</div>
+                </div>
+                <div className="mb-2">
+                  <span className="font-semibold">상태:</span>
+                  <div className="text-sm">{selectedVp.status}</div>
                 </div>
                 <div className="mb-2">
                   <span className="font-semibold">생성일:</span>
                   <div className="text-sm">{new Date(selectedVp.created_at).toLocaleString()}</div>
                 </div>
-              </div>
-              
-              {selectedVp.verification_result && (
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold mb-2">검증 결과</h3>
-                  <div className="bg-gray-100 p-3 rounded">
-                    {(() => {
-                      const result = parseVerificationResult(selectedVp.verification_result);
-                      if (!result) return <p>검증 결과가 없습니다.</p>;
-                      
-                      return (
-                        <div>
-                          <div className={`p-2 mb-2 rounded ${result.signatureValid && result.ageVerified ? 'bg-green-100' : 'bg-red-100'}`}>
-                            <p className="font-medium">
-                              {result.signatureValid && result.ageVerified 
-                                ? '✅ 검증 성공' 
-                                : '❌ 검증 실패'}
-                            </p>
-                          </div>
-                          <div className="text-sm">
-                            <p><span className="font-medium">서명 유효성:</span> {result.signatureValid ? '유효함' : '유효하지 않음'}</p>
-                            <p><span className="font-medium">연령 검증:</span> {result.ageVerified ? '통과' : '실패'}</p>
-                            <p><span className="font-medium">실제 연령:</span> {result.actualAge}세</p>
-                            <p><span className="font-medium">요구 연령:</span> {result.requiredAge}세</p>
-                            <p><span className="font-medium">검증 시간:</span> {new Date(result.timestamp).toLocaleString()}</p>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
+                <div className="mb-2">
+                  <span className="font-semibold">해시:</span>
+                  <div className="text-xs break-all">{selectedVp.vp_hash || '해시 정보 없음'}</div>
                 </div>
-              )}
+              </div>
               
               <h3 className="text-lg font-semibold mb-2">VP 데이터</h3>
               <div className="bg-gray-100 p-3 rounded overflow-x-auto max-h-96">
                 <pre className="text-sm break-all">
-                  {JSON.stringify(parseVpData(selectedVp.presentation_data), null, 2)}
+                  {JSON.stringify(parseVpData(selectedVp.vp_data), null, 2)}
                 </pre>
               </div>
             </>

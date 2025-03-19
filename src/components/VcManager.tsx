@@ -420,7 +420,7 @@ const VcManager: React.FC = () => {
 
   return (
     <div className="bg-white shadow-md rounded-lg p-6 mb-6">
-      <h2 className="text-2xl font-bold mb-4">VC(Verifiable Credential) 관리</h2>
+      <h2 className="text-2xl font-bold mb-4">VC 관리</h2>
       
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
