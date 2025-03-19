@@ -1,0 +1,28 @@
+# Git
+.git
+.gitignore
+
+# Node.js
+node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Next.js
+.next
+
+# 데이터베이스 파일
+/data/*.db
+
+# 로그 파일
+/logs/*.log
+
+# Docker 파일
+/docker
+
+# 기타 파일
+.DS_Store
+.env
+.env.*
+*.md
+!README.md 

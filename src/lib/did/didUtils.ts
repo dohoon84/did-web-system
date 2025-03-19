@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { ethers } from 'ethers';
+import { getDIDByDIDString } from '../db/didRepository';
 
 export interface DIDDocument {
   '@context': string[];
@@ -95,5 +96,26 @@ export const validateDIDDocument = (document: DIDDocument): boolean => {
     return true;
   } catch (error) {
     return false;
+  }
+};
+
+/**
+ * DID 문자열로 DID 문서를 조회합니다.
+ * @param didString DID 문자열
+ * @returns DID 문서 또는 null
+ */
+export const resolveDid = async (didString: string): Promise<DIDDocument | null> => {
+  try {
+    // DB에서 DID 조회
+    const didRecord = getDIDByDIDString(didString);
+    if (!didRecord || !didRecord.did_document) {
+      return null;
+    }
+    
+    // 문서 파싱
+    return JSON.parse(didRecord.did_document) as DIDDocument;
+  } catch (error) {
+    console.error('DID 조회 오류:', error);
+    return null;
   }
 }; 
